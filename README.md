@@ -46,8 +46,6 @@ ALLOWED_CONVERTED_TYPES: List[str] = ["md","json","yaml","txt"]
 - Озвучивание
 - Перевод
 
-
-
 ## Remark
  - `FastAPI` не позволяет в `Swagger` документировать сокеты, поэтому оставлю здесь руководство по ручке `ws://ip:port/parser/extract`: 
     ### Входные данные:
@@ -94,7 +92,8 @@ ALLOWED_CONVERTED_TYPES: List[str] = ["md","json","yaml","txt"]
     docker run -d \
         --name sova-parser \
         -p 1337:1337 \
-        --restart unless-stopped
+        --restart unless-stopped \
+        sova-parser:version 
     ```
 3) Просмотр логов
 
