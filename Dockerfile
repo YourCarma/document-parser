@@ -2,7 +2,7 @@ FROM bitnami/pytorch:2.6.0-debian-12-r3
 
 LABEL name=["v666k0"]
 
-WORKDIR /builder
+WORKDIR /app
 
 COPY ./pyproject.toml ./pyproject.toml
 COPY ./poetry.lock ./poetry.lock
@@ -14,5 +14,7 @@ RUN poetry config virtualenvs.create false
 RUN poetry config installer.max-workers 2
 RUN poetry install --no-root
 
-EXPOSE 1337 
+COPY . .
+
+EXPOSE 13373
 ENTRYPOINT ["python3","app/main.py"] 
