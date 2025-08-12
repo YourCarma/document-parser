@@ -15,9 +15,9 @@ class BadRequestError(HTTPException):
         )
 
 class ContentNotSupportedError(HTTPException):
-    def __init__(self,content_type:str):
+    def __init__(self,detail:str):
         super().__init__(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, 
-            detail=f"Выбранный тип контента {content_type} не поддерживается сервисом",
+            detail=detail,
         )
     

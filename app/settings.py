@@ -1,35 +1,38 @@
 from pydantic_settings import BaseSettings
 from typing import List
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class Settings(BaseSettings):
-    HOST: str = '0.0.0.0'
-    PORT: int = 1337
-    # SERVICE_NAME = "Sova-Parser"
-    DOCUMENTS_DIR:str = str(Path(__file__).parent.parent / "documents")
-    SCRATCH_DIR:str = str(Path(__file__).parent.parent / "scratch")
+    SERVICE_NAME: str
+    HOST: str
+    PORT: int
     ML_DIR: str = str(Path(__file__).parent.parent / "ml")
     
-    ALLOWED_LANGS: List[str] = ["ru","en","ar","fr","uk"]
+    OUTPUT_FORMAT: str
+    
+    TASK_MANAGER_ENDPOINT: str
+    S3_CLOUD_ENDPOINT: str
+    MINIO_ENDPOINT: str
+    CLOUD_BUCKET_NAME: str
+    
+    ALLOWED_LANGS: List[str] = ["ru","en","ar","fr","uk"] #iso-639
     ALLOWED_MIME_TYPES: List[str] = [
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/doc",
-        "application/msword",
-        "application/pdf",
-        "image/png",
         "image/jpeg",
         "image/webp",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "application/vnd.ms-powerpoint",
+        "image/png",
+        "image/tiff",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.oasis.opendocument.text",
+        "application/pdf",
+        "text/html",
     ]
-    ALLOWED_CONVERTED_TYPES: List[str] = ["md","json","yaml","txt"]
-    TTS_URL: str = "http://192.168.0.59:5000/tts/converted"
-    AUDIOS_PATH: str = "/mnt/king/sova.git/services/text_to_speech/audios/"
-    SUMMARIZER_URL: str = "http://192.168.0.67:8009/llm_tools/summary_text"
-    TASK_MANAGER_URL: str = "http://192.168.0.35:10001/storage/task"
-    OPENAI_URL: str = "http://192.168.0.59:8091/v1"
-    OPENAI_KEY: str = "sk-no-key-required"
-    TRANSLATOR_URL: str = "http://192.168.0.59:8001/translator/text"
-    SERVICE_NAME: str = "Sova-Parser"
     
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+
 settings = Settings()

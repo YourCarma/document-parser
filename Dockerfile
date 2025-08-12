@@ -1,20 +1,20 @@
-FROM bitnami/pytorch:2.6.0-debian-12-r3
+FROM python:3.11-slim-buster
 
-LABEL name=["v666k0"]
+LABEL MAINTAINER = ["v666k0"]
 
-WORKDIR /app
+WORKDIR /sova-parser
 
-COPY ./pyproject.toml ./pyproject.toml
-COPY ./poetry.lock ./poetry.lock
+COPY poetry.lock pyproject.toml ./
 
-RUN python3 -m pip install --upgrade pip
-RUN python3 -m pip install poetry
-
+RUN python3 -m pip install poetry 
 RUN poetry config virtualenvs.create false
 RUN poetry config installer.max-workers 2
+RUN poetry lock
 RUN poetry install --no-root
+RUN poetry add opencv-python-headless 
 
 COPY . .
 
-EXPOSE 13373
+EXPOSE 5000
+
 ENTRYPOINT ["python3","app/main.py"] 

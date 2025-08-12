@@ -12,26 +12,32 @@ from parser.router import router
 app=FastAPI(
     title="Sova-Parser",
     description="""
-**Предназначен для парсинга файлов различных типов, извлечение дополнительных элементов(картинок,таблиц) и конвертации с сохранением форматирования, перевода и озвучивания, выборки краткого содержания текстового содержимого.**
+## Overwiew
+Сова-парсер - сервисы\, предназначенный для обработки различных типов файлов, извлечение их элементов и конвертации их в [markdown](https://en.wikipedia.org/wiki/Markdown) с сохранением форматирования, а так же `перевода` на основе библиотеки [docling](https://github.com/docling-project/docling) при помощи движка [EasyOCR](https://www.jaided.ai/easyocr/documentation/). Процесс работы с документами отслеживается в веб-хук менеджере, пользователь может опционально выбрать изображения и таблицы для извлечения, а также перевести текст.    
 
+## Features 
 ### Поддерживыемые форматы файлов:
 ```python
 ALLOWED_MIME_TYPES: List[str] = [
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/doc",
-    "application/msword",
-    "application/pdf",
-    "image/png",    
     "image/jpeg",
     "image/webp",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "application/vnd.ms-powerpoint",
+    "image/png",
+    "image/tiff",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.oasis.opendocument.text",
+    "application/pdf",
+    "text/html",
 ]
 ```
+ - `jpeg`,`jpg`,`webp` - Изображения
+ - `doc`,`docx`,`odt` - Текстовые документы
+ - `pdf`,`html` - Другие форматы
+
 
 ### Поддерживаемые языки:
 ```python 
-ALLOWED_LANGS: List[str] = ["ru","en","ar","fr","uk"]
+ALLOWED_LANGS: List[str] = ["ru","en","ar","fr","uk"] # Согласно стандарту iso-639
 ```
  - `ru` - Русский
  - `en` - Английский (default)
@@ -39,23 +45,22 @@ ALLOWED_LANGS: List[str] = ["ru","en","ar","fr","uk"]
  - `fr` - Французский
  - `uk` - Украинский
   
-### Поддерживаемые форматы извлечения:
-```python 
-ALLOWED_CONVERTED_TYPES: List[str] = ["md","json","yaml","txt"]
-```
- - `txt` - .txt
- - `json` - .json
- - `yaml` - .yaml
- - `markdown` - .md
- 
 ### Дополнительные элементы
 - 📊 Таблицы
 - 🖼️ Картинки
-""",
+
+### Дополнительные опции
+- Перевод
+
+
+### Remark
+ - В директории `/documents` лежат файлы-пробники для наглядной работы сервиса.
+    """,
     version="0.0.1"
 )
 
 origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -63,8 +68,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-app.mount("/scratch",StaticFiles(directory=Path("scratch")),name="scratch")
 
 app.include_router(router)
 

@@ -1,21 +1,16 @@
 from settings import settings
-import asyncio,requests
+import requests
+from typing import List
+from uuid import uuid4
+from io import BytesIO
 from PIL import Image
-from fastapi import UploadFile
+from fastapi import UploadFile,File
 from .schemas import (
-    ExtractRequest,
+    ParseRequest,
     Task,
     Progress,
     TaskStatus,
 )
-from fastapi.websockets import WebSocket,WebSocketDisconnect
-from typing import List
-from .exceptions import (
-    ContentNotSupportedError,
-    InternalServerError
-    )
-from pathlib import Path
-import json,yaml
 from datetime import datetime,timezone
 from abc import ABC
 from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
@@ -28,7 +23,10 @@ from docling.document_converter import (
 from docling.datamodel.pipeline_options import (
     PdfPipelineOptions,
     EasyOcrOptions,
-    )
+)
+from .exceptions import (
+    InternalServerError
+)
 from docling_core.types.doc import PictureItem, TableItem
 from docling.pipeline.simple_pipeline import SimplePipeline
 from docling.pipeline.standard_pdf_pipeline import StandardPdfPipeline
@@ -38,23 +36,25 @@ from docling_core.types.doc import ImageRefMode, TableItem, TextItem
 class TaskManager(ABC):
     
     def __init__(self):
-        self.url = settings.TASK_MANAGER_URL
+        self.SERVICE_NAME = settings.SERVICE_NAME
+        self.TASK_MANAGER_ENDPOINT = settings.TASK_MANAGER_ENDPOINT
     
-    async def storage(self,key:str,task:Task):
+    async def storage_task(self,key:str,task:Task):
         resp = requests.post(
-            url=self.url,
+            url=self.TASK_MANAGER_ENDPOINT+"/storage/task",
             json={
                 "key":key,
                 "task":{
                     "created_at":datetime.now(timezone.utc).isoformat(),
-                    "updated_at":datetime.now(timezone.utc).isoformat(),
                     "progress":{
                         "progress":task.progress.progress,
                         "status":task.progress.status,
                     },
+                    "response_data":"",
+                    "service":self.SERVICE_NAME,
                     "task_id":str(task.task_id),
+                    "updated_at":datetime.now(timezone.utc).isoformat(),
                     "user_id":str(task.user_id),
-                    "response_data":""
                 },
             }
         )
@@ -62,152 +62,105 @@ class TaskManager(ABC):
         
     async def update_progress(self,key:str,progress: Progress):
         resp = requests.patch(
-            url=self.url,
+            url=self.TASK_MANAGER_ENDPOINT+"/storage/update_progress",
             json={
                 "key":key,
                 "progress":{
                     "progress":progress.progress,
                     "status":progress.status,
-                }
+                },
             }
         )
-        return resp.content.decode()
+        return resp.json()
         
 
     async def update_response_data(self,key:str,response_data:str):
         resp = requests.patch(
-            url=self.url,
+            url=self.TASK_MANAGER_ENDPOINT+"/storage/update_response_data",
             json={
                 "key":key,
                 "response_data":response_data
             }
         )
-        return resp.content.decode()
+        return resp.json()
 
 class Uploader(ABC):
-    
     def validate(self,
                 mime_type: str = None,
-                lang: str = None,
-                target_conv_format: str = None,
-                ):
+        ) -> bool:
         if mime_type not in settings.ALLOWED_MIME_TYPES:
-            raise ContentNotSupportedError(content_type=f"mime-type:{mime_type}")
+            return False
+        return True
     
-        if target_conv_format not in settings.ALLOWED_CONVERTED_TYPES:
-            raise ContentNotSupportedError(content_type=f"converted-type:{target_conv_format}")
+    # def create_directory_tree():
+    #     pass
     
-        if lang not in settings.ALLOWED_LANGS:
-            raise ContentNotSupportedError(content_type=f"lang:{lang}")
-    
-    async def save_src_file_and_prepare_scratch_dir(self,
-                                              file: UploadFile,
-                                              elements: List[str],
-                                              ) -> str:
+    def upload_to_s3_cloud(
+        self,
+        files: list[UploadFile] = File(...),
+    ): #TODO - загрузка в s3 cloud в дереве /{user_folder}/document_parser/{filename}/{original} 
+        files_form = []
+        for file in files:
+            file_content = file.file.read()
+            files_form.append(
+                ("files", (file.filename, file_content, file.content_type))
+            )
+            file.file.seek(0)
         
-        scratch_dir_path = Path(settings.SCRATCH_DIR) / f"{file.filename}_{datetime.now().strftime("%d.%m.%y-%H.%M")}"
-        scratch_dir_path.mkdir(parents=True,exist_ok=True)
+        resp = requests.put(
+            url=settings.S3_CLOUD_ENDPOINT+f"/cloud/{settings.CLOUD_BUCKET_NAME}/file/upload",
+            files=files_form,
+        )  
         
-        scratch_src_file_path = Path(scratch_dir_path) / "src"
-        scratch_src_file_path.mkdir(parents=True,exist_ok=True)
+        if resp.status_code != 200:
+            raise InternalServerError(detail=f"Ошибка загрузки файлов в корзину {settings.CLOUD_BUCKET_NAME}: {resp.json()['message']}")
         
-        file_path = scratch_src_file_path / file.filename
-        with open(file_path,"wb") as buff:
-            buff.write(await file.read())
-        
-        if "tables" in elements:
-            scratch_file_tables_path = Path(scratch_dir_path) / "tables"
-            scratch_file_tables_path.mkdir(parents=True,exist_ok=True) 
-        
-        if "pictures" in elements:
-            scratch_file_pictures_path = Path(scratch_dir_path) / "pictures"
-            scratch_file_pictures_path.mkdir(parents=True,exist_ok=True)
-        
-        return str(scratch_src_file_path / file.filename)
-    
-    async def resize_image(self,image_path:str,size=1024):
-        with Image.open(image_path) as img:
-            width, height = img.size
-            left = (width - size) // 2
-            top = (height - size) // 2
-            right = left + size
-            bottom = top + size
+        file_links = []
+        for file in files:
+            resp = requests.post(
+                url=settings.S3_CLOUD_ENDPOINT+f"/cloud/{settings.CLOUD_BUCKET_NAME}/file/share",
+                json={
+                    'dir_path': '/',
+                    'expired_secs':3600,
+                    'file_name': file.filename,
+                    'only_relative_path':True,
+                }
+            )        
             
-            img_cropped = img.crop((left, top, right, bottom))
-            img_cropped.save(image_path)
+            if resp.status_code != 200:
+                raise InternalServerError(detail=f"Ошибка получение share-линки файла {file.filename} в корзине {settings.CLOUD_BUCKET_NAME}")
 
-            img.save(image_path)
-    
-class Extractor(
+            share_link = settings.MINIO_ENDPOINT + str(resp.json()['message']).split("?")[0]
+            
+            file_links.append(share_link)
+            
+        return file_links
+        
+class Parser(
     Uploader,
     TaskManager
 ):
+    def __init__(self):
+        self.LANGS = settings.ALLOWED_LANGS
+        self.TASK_MANAGER_ENDPOINT = settings.TASK_MANAGER_ENDPOINT
     
-    def text_to_speech(self,message,voice_name) -> str:
-        audio_filename = requests.post(
-            url=settings.TTS_URL,
-            json={
-                "message":message,
-                "voice_name":voice_name,
-            }
-        ).json()['audio_name']
-        
-        return settings.settings.AUDIOS_PATH+audio_filename
-         
-    def translate_text(self,text:str,target_lang:str,src_lang:str):
-        try:    
-            resp = requests.post(
-                url=settings.TRANSLATOR_URL,
-                json={
-                    'text':text,
-                    'target_language': target_lang,
-                    'source_language':src_lang,
-                }
-            )
-        except ValueError as e:
-            return str(e)
-        
-        translated_text = resp.json()['text']
-        return translated_text
-
-    async def extract(self,
-                      ws: WebSocket,
-                      scratch_dir_path:str,
-                      src_file:UploadFile,
-                      extract_request:ExtractRequest,
+    async def parse(self,
+                    file_share_link:str,
+                    TASK_KEY:str,
+                    parse_request:ParseRequest = None,
         ):
         """
             Cyrillic is only compatible with English, try lang_list=["ru","rs_cyrillic","be","bg","uk","mn","en"]
             Arabic is only compatible with English, try lang_list=["ar","fa","ur","ug","en"]
-        """        
-        await ws.send_json({
-            "type":"info",
-            "body":{
-                "filename":f"{src_file.filename}",
-                "status":"Начал работу с файлом"
-                },
-            })
-        await asyncio.sleep(0.5)
-        
-        tables_path = []
-        pictures_path = []
-        
-        langs: List[str] = [extract_request.src_lang,'en']       
+        """                
+    
         ocr_options = EasyOcrOptions(
-            lang=langs,
+            # lang=self.LANGS,
+            lang=["ar","fa","ur","ug","en"],
             force_full_page_ocr=True,
             model_storage_directory=settings.ML_DIR,
             download_enabled=False,   
         )
-        
-        await ws.send_json({
-            "type":"info",
-            "body":{
-                "filename":f"{src_file.filename}",
-                "status":"Подготовил EasyOCR для распознавания",
-                },
-            })
-        await asyncio.sleep(0.5)
         
         pipeline_options = PdfPipelineOptions()
         pipeline_options.accelerator_options = AcceleratorOptions(num_threads=8,device=AcceleratorDevice.CPU)
@@ -224,15 +177,6 @@ class Extractor(
         pipeline_options.generate_picture_images = True
         pipeline_options.ocr_options = ocr_options
 
-        await ws.send_json({
-            "type":"info",
-            "body":{
-                "filename":f"{src_file.filename}",
-                "status":"Задал пайплайны конвертации",
-                },
-            })
-        await asyncio.sleep(0.5)
-
         format_options = {
             InputFormat.DOCX: WordFormatOption(pipeline_cls=SimplePipeline),
             InputFormat.PDF: PdfFormatOption(pipeline_cls=StandardPdfPipeline,backend=PyPdfiumDocumentBackend ,pipeline_options=pipeline_options),
@@ -240,220 +184,90 @@ class Extractor(
         }
         
         doc_converter = DocumentConverter(
-                allowed_formats=[
-                    InputFormat.PDF,
-                    InputFormat.IMAGE,
-                    InputFormat.DOCX,
-                    InputFormat.PPTX, 
-                ],
-                format_options=format_options,
-            )
-
-        await ws.send_json({
-            "type":"info",
-            "body":{
-                "filename":f"{src_file.filename}",
-                "status":"Инициализировал конвертер",
-                },
-            })
-        await asyncio.sleep(0.5)
-        
+            allowed_formats=[
+                InputFormat.PDF,
+                InputFormat.IMAGE,
+                InputFormat.DOCX,
+                InputFormat.PPTX, 
+            ],
+            format_options=format_options,
+        )
+    
         conv_result = doc_converter.convert(
-            source=Path(scratch_dir_path) / "src" / src_file.filename,
-            page_range=(1,extract_request.max_num_page),
+            source=file_share_link,
+            # page_range=(1,parse_request.max_num_page),
             raises_on_error=True,
         )   
-
-        extracted_text = conv_result.document.export_to_markdown()
-
-        await ws.send_json({
-            "type":"info",
-            "body":{
-                "filename":f"{src_file.filename}",
-                "status":"Сконвертировал файл"
-                },
-            })
-        await asyncio.sleep(0.5)
-
-        summary_text = ""
-        try:
-            text = conv_result.document.export_to_text()
-            summary_text = requests.post(
-                url=settings.SUMMARIZER_URL,
-                params={
-                    "text":text,
-                    "summary_param":"word",
-                    "count":20,
-                },
-            ).content.decode()
-        except requests.exceptions.ConnectionError as conn_err:
-            summary_text = "Краткая выжимка текста"
         
-        table_counter = 0
-        if "tables" in extract_request.extracted_elements:
-            path_to_tables = Path(scratch_dir_path) / "tables"
-            path_to_tables.mkdir(exist_ok=True,parents=True)
-            for element, _ in conv_result.document.iterate_items():
-                if isinstance(element, TableItem):
-                    table_counter += 1
-                    element_image_filename = path_to_tables / f"table-{table_counter}.png"
-                    tables_path.append("/"+str(element_image_filename).split("sova-parser")[-1].lstrip("/"))
-                    with element_image_filename.open("wb") as fp:
-                        element.get_image(conv_result.document).save(fp, "PNG")
-        
-        await ws.send_json({
-            "type":"info",
-            "body":{
-                "filename":f"{src_file.filename}",
-                "status":f"Обнаружил {table_counter} таблиц"
-            },
-        })
-        await asyncio.sleep(0.5)
-            
-        await ws.send_json({
-            "type":"info",
-            "body":{
-                "filename":f"{src_file.filename}",
-                "status":"Начал поиск картинок"
-            },
-        })
-        await asyncio.sleep(0.5)
-        
-        picture_counter = 0
-        if "pictures" in extract_request.extracted_elements:
-            path_to_pictures = Path(scratch_dir_path) / "pictures"
-            path_to_pictures.mkdir(exist_ok=True,parents=True)
-            for element, _ in conv_result.document.iterate_items():    
-                if isinstance(element,PictureItem):
-                    picture_counter += 1
-                    element_image_filename = path_to_pictures / f"picture-{picture_counter}.png"
-                    pictures_path.append("/"+str(element_image_filename).split("sova-parser")[-1].lstrip("/"))                     
-                    with element_image_filename.open("wb") as fp:
-                        element.get_image(conv_result.document).save(fp, "PNG")
-        
-        await ws.send_json({
-            "type":"info",
-            "body":{
-                "filename":f"{src_file.filename}",
-                "status":f"Обнаружил {picture_counter} картинок"
-            },
-        })
-        await asyncio.sleep(0.5)
-            
-        
-        if extract_request.translated:
-            await ws.send_json({
-                "type":"info",
-                "body":{
-                    "filename":f"{src_file.filename}",
-                    "status":"Начал перевод текста"
-                }
-            })
-            
-            path_to_translate = Path(scratch_dir_path) / "translate" / extract_request.target_lang
-            path_to_translate.mkdir(exist_ok=True,parents=True)
-            
-            copy_document = conv_result.document.model_copy(deep=True)
-            for element, _ in copy_document.iterate_items():
-                if isinstance(element, TextItem):
-                    element.orig = element.text
-                    element.text = self.translate_text(text=element.text,target_lang=extract_request.target_lang,src_lang=extract_request.src_lang)
+        resp_update_progress = await self.update_progress(
+            key=TASK_KEY,
+            progress=Progress(
+                progress=0.33,
+                status=TaskStatus.PROCESSING,
+            )
+        )
 
-                elif isinstance(element, TableItem): 
-                    for cell in element.data.table_cells:
-                        cell.text = self.translate_text(text=cell.text,target_lang=extract_request.target_lang,src_lang=extract_request.src_lang)
+        parse_file_filename = f"parse_{file_share_link.split('/')[-1].split('.')[0]}.md"
+        parse_file_bytes=conv_result.document.export_to_markdown(
+            image_mode=ImageRefMode.EMBEDDED,
+        ).encode('utf-8')
+        
+        parse_file_share_link = self.upload_to_s3_cloud(
+            files=[UploadFile(
+                file=BytesIO(parse_file_bytes),
+                filename=parse_file_filename,
+                )
+            ]
+        )
 
-            md_file = path_to_translate / f"{copy_document.name}-translated.md"
-            with open(md_file,"w",encoding="utf-8") as fp:
-                fp.write(copy_document.export_to_markdown())
-            
-            extracted_text = copy_document.export_to_text()
-             
-        await ws.send_json({
-            "type":"info",
-            "body":{
-                "filename":f"{src_file.filename}",
-                "status":f"Конвертирую в {extract_request.target_conv_format} выбранный файл"  
-            },
-        })
-        await asyncio.sleep(0.5)
-            
-        scratch_file_path_with_lang = Path(scratch_dir_path) / extract_request.src_lang
+        resp_update_progress = await self.update_progress(
+            key=TASK_KEY,
+            progress=Progress(
+                progress=0.66,
+                status=TaskStatus.PROCESSING,
+            )
+        )
+        
+        #П if parse_request.translated:
+        #     copy_document = conv_result.document.model_copy(deep=True)
+        #     for element, _ in copy_document.iterate_items():
+        #Е         if isinstance(element, TextItem):
+        #             element.orig = element.text
+        #             element.text = self.translate_text(
+        #Р                 text=element.text,
+        #                 src_lang=parse_request.src_lang,
+        #                 target_lang=parse_request.target_lang,
+        #Е             )
 
-        match extract_request.target_conv_format:
-            case "md":
-                scratch_file_path_with_lang_and_ext = scratch_file_path_with_lang / "md"
-                scratch_file_path_with_lang_and_ext.mkdir(parents=True,exist_ok=True)
-                scratch_file_path = scratch_file_path_with_lang_and_ext / f"{conv_result.input.file.stem}.md"
-                # conv_result.document.save_as_markdown(scratch_file_path,image_mode=ImageRefMode.EMBEDDED)
-                with open(scratch_file_path,"w",encoding="utf-8") as fp:
-                    fp.write(conv_result.document.export_to_markdown())
-                # extracted_text = conv_result.document.export_to_markdown()
-                 
-                await ws.send_json({
-                    "type":"info",
-                    "body":{
-                        "filename":f"{src_file.filename}",
-                        "status":"Сконвертировал файл в md"
-                }})
-                
-                await asyncio.sleep(0.5)
-                    
-            case "json":
-                scratch_file_path_with_lang_and_ext = scratch_file_path_with_lang / "json"
-                scratch_file_path_with_lang_and_ext.mkdir(parents=True,exist_ok=True)
-                scratch_file_path = scratch_file_path_with_lang_and_ext / f"{conv_result.input.file.stem}.json"
-                # conv_result.document.save_as_json(scratch_dir_path,image_mode=ImageRefMode.EMBEDDED)
-                with open(scratch_file_path,"w",encoding="utf-8") as fp:
-                    fp.write(json.dumps(conv_result.document.export_to_dict()))
-                
-                await ws.send_json({
-                    "type":"info",
-                    "body":{
-                        "filename":f"{src_file.filename}",
-                        "status":"Сконвертировал файл в json"
-                }})
-                await asyncio.sleep(0.5)
-                
-            case "yaml":
-                scratch_file_path_with_lang_and_ext = scratch_file_path_with_lang / "yaml"
-                scratch_file_path_with_lang_and_ext.mkdir(parents=True,exist_ok=True)
-                scratch_file_path = scratch_file_path_with_lang_and_ext /f"{conv_result.input.file.stem}.yaml"
-                # conv_result.document.save_as_yaml(scratch_dir_path,image_mode=ImageRefMode.REFERENCED)
-                with open(scratch_file_path,"w",encoding="utf-8") as fp:
-                    fp.write(yaml.safe_dump(conv_result.document.export_to_dict()))
-                    
-                await ws.send_json({
-                    "type":"info",
-                    "body":{
-                        "filename":f"{src_file.filename}",
-                        "status":"Сконвертировал файл в yaml"
-                }})
-                await asyncio.sleep(0.5)
-                
-            case "txt":
-                scratch_file_path_with_lang_and_ext = scratch_file_path_with_lang / "txt"
-                scratch_file_path_with_lang_and_ext.mkdir(parents=True,exist_ok=True)
-                scratch_file_path = scratch_file_path_with_lang_and_ext / f"{conv_result.input.file.stem}.txt"
-                with open(scratch_file_path,"w",encoding="utf-8") as fp:
-                    fp.write(conv_result.document.export_to_text())
-                    
-                await ws.send_json({
-                    "type":"info",
-                    "body":{
-                        "filename":f"{src_file.filename}",
-                        "status":"Сконвертировал файл в txt"
-                }})
-                await asyncio.sleep(0.5)        
-                
-        await ws.send_json({"type":"file-ended","body":f"{src_file.filename}"})
-        await asyncio.sleep(0.5)
-                
+        #         elif isinstance(element, TableItem): 
+        #В             for cell in element.data.table_cells:
+        #                 cell.text = self.translate_text(
+        #О                     text=cell.text,
+        #                     src_lang=parse_request.src_lang,
+        #Д                    target_lang=parse_request.target_lang,
+        #                 )
+        
+        resp_update_progress = await self.update_progress(
+            key=TASK_KEY,
+            progress=Progress(
+                progress=0.99,
+                status=TaskStatus.PROCESSING,
+            )
+        )
+        
+        #translated_document = copy_document.export_to_markdown() #TODO -> компановка переведенных элементов и текста в единый документ и загрузка в s3 cloud
+        # self.upload_to_s3_cloud()
+        
+        resp_update_progress = await self.update_progress(
+            key=TASK_KEY,
+            progress=Progress(
+                progress=1.0,
+                status=TaskStatus.READY,
+            )
+        )
+        
         return {
-            f"{src_file.filename}":{
-                "text":extracted_text,
-                "summary":summary_text,
-                "images":pictures_path,
-                "tables":tables_path,
-            },
+            "parse_file_share_link":parse_file_share_link[0],
+            "translated_file_share_link":""
         }
+    
