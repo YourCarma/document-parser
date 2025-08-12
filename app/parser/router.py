@@ -39,13 +39,13 @@ async def parse(
     USER_ID = request.headers.get("X-UserID","guest")
     SERVICE_NAME = settings.SERVICE_NAME
       
-    # parse_request = ParseRequest(
-    #     translated=bool(parse_params['translated'] if str(parse_params['translated']).lower() in ['true','false'] else False), 
-    #     src_lang=parse_params['src_lang'],
-    #     target_lang=parse_params['target_lang'],   
+    parse_request = ParseRequest(
+        translated=bool(parse_params['translated'] if str(parse_params['translated']).lower() in ['true','false'] else False), 
+        src_lang=parse_params['src_lang'],
+        target_lang=parse_params['target_lang'],   
                     
-    #     max_num_page=parse_params['max_num_page'],
-    # )
+        max_num_page=parse_params['max_num_page'],
+    )
     
     if len(files) == 0:
         raise BadRequestError("Загрузите файлы для обработки")
@@ -78,7 +78,7 @@ async def parse(
         extract_response = await parser.parse(
             file_share_link=file_share_link,
             TASK_KEY=TASK_KEY,
-            # parse_request=parse_request,
+            parse_request=parse_request,
         )
         
         body_resp.update({'file':extract_response})   

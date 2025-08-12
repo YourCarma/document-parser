@@ -195,7 +195,7 @@ class Parser(
     
         conv_result = doc_converter.convert(
             source=file_share_link,
-            # page_range=(1,parse_request.max_num_page),
+            page_range=(1,parse_request.max_num_page),
             raises_on_error=True,
         )   
         
@@ -228,24 +228,24 @@ class Parser(
             )
         )
         
-        #П if parse_request.translated:
-        #     copy_document = conv_result.document.model_copy(deep=True)
-        #     for element, _ in copy_document.iterate_items():
-        #Е         if isinstance(element, TextItem):
-        #             element.orig = element.text
-        #             element.text = self.translate_text(
-        #Р                 text=element.text,
-        #                 src_lang=parse_request.src_lang,
-        #                 target_lang=parse_request.target_lang,
-        #Е             )
+        if parse_request.translated:
+            copy_document = conv_result.document.model_copy(deep=True)
+            for element, _ in copy_document.iterate_items():
+                if isinstance(element, TextItem):
+                    element.orig = element.text
+                    element.text = self.translate_text(
+                        text=element.text,
+                        src_lang=parse_request.src_lang,
+                        target_lang=parse_request.target_lang,
+                   )
 
-        #         elif isinstance(element, TableItem): 
-        #В             for cell in element.data.table_cells:
-        #                 cell.text = self.translate_text(
-        #О                     text=cell.text,
-        #                     src_lang=parse_request.src_lang,
-        #Д                    target_lang=parse_request.target_lang,
-        #                 )
+                elif isinstance(element, TableItem): 
+                   for cell in element.data.table_cells:
+                    cell.text = self.translate_text(
+                        text=cell.text,
+                        src_lang=parse_request.src_lang,
+                        target_lang=parse_request.target_lang,
+                    )
         
         resp_update_progress = await self.update_progress(
             key=TASK_KEY,
@@ -255,8 +255,18 @@ class Parser(
             )
         )
         
-        #translated_document = copy_document.export_to_markdown() #TODO -> компановка переведенных элементов и текста в единый документ и загрузка в s3 cloud
-        # self.upload_to_s3_cloud()
+        translate_file_filename = f"parse_{file_share_link.split('/')[-1].split('.')[0]}.md"
+        translate_file_bytes=copy_document.document.export_to_markdown(
+            image_mode=ImageRefMode.EMBEDDED,
+        ).encode('utf-8')
+        
+        translate_file_share_link = self.upload_to_s3_cloud(
+            files=[UploadFile(
+                file=BytesIO(translate_file_bytes),
+                filename=translate_file_filename,
+                )
+            ]
+        )
         
         resp_update_progress = await self.update_progress(
             key=TASK_KEY,
@@ -268,6 +278,6 @@ class Parser(
         
         return {
             "parse_file_share_link":parse_file_share_link[0],
-            "translated_file_share_link":""
+            "translated_file_share_link":translate_file_share_link[0],
         }
     
