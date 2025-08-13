@@ -2,7 +2,7 @@
 .PHONY: build run logs
 
 build:
-	docker build -t parser:$(VERSION)
+	docker build -t parser:$(VERSION) .
 
 run:
 	docker run -d \
