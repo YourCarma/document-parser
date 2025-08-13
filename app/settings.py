@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     TASK_MANAGER_ENDPOINT: str
     S3_CLOUD_ENDPOINT: str
     MINIO_ENDPOINT: str
+    TRANSLATOR_ENDPOINT: str
+    
     CLOUD_BUCKET_NAME: str
     
     ALLOWED_LANGS: List[str] = ["ru","en","ar","fr","uk"] #iso-639

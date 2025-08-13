@@ -1,7 +1,12 @@
-from fastapi import APIRouter,UploadFile,File,Form,Header,Request
+from fastapi import (
+    APIRouter,
+    UploadFile,
+    File,
+    Request,
+    Form
+)
 from typing import List
 from settings import settings
-from fastapi.responses import FileResponse
 from uuid import uuid4
 from .schemas import (
     ParseRequest,
@@ -23,6 +28,7 @@ from datetime import datetime
 from pathlib import Path
 
 router = APIRouter(prefix="/parser")
+
 uploader = Uploader()
 taskManager = TaskManager()
 parser = Parser()
@@ -34,17 +40,19 @@ parser = Parser()
 async def parse(
     request: Request,
     files: List[UploadFile],
-    parse_params: ParseRequest = None,
+    translated:str = Form(...),
+    src_lang:str = Form(...),
+    target_lang:str = Form(...),
+    max_num_page: str = Form(...) 
 ):
     USER_ID = request.headers.get("X-UserID","guest")
     SERVICE_NAME = settings.SERVICE_NAME
-      
+
     parse_request = ParseRequest(
-        translated=bool(parse_params['translated'] if str(parse_params['translated']).lower() in ['true','false'] else False), 
-        src_lang=parse_params['src_lang'],
-        target_lang=parse_params['target_lang'],   
-                    
-        max_num_page=parse_params['max_num_page'],
+        translated=bool(translated if str(translated).lower() in ['true','false'] else False), 
+        src_lang=src_lang,
+        target_lang=target_lang,
+        max_num_page=int(max_num_page),
     )
     
     if len(files) == 0:
@@ -70,7 +78,7 @@ async def parse(
             user_id=USER_ID,
             progress=Progress(
                 progress=0.1,
-                status=TaskStatus.PENGING,
+                status=TaskStatus.PROCESSING,
                 )    
             )                    
         )

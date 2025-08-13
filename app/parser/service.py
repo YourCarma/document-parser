@@ -1,9 +1,7 @@
 from settings import settings
 import requests
-from typing import List
 from uuid import uuid4
 from io import BytesIO
-from PIL import Image
 from fastapi import UploadFile,File
 from .schemas import (
     ParseRequest,
@@ -98,7 +96,7 @@ class Uploader(ABC):
     def upload_to_s3_cloud(
         self,
         files: list[UploadFile] = File(...),
-    ): #TODO - загрузка в s3 cloud в дереве /{user_folder}/document_parser/{filename}/{original} 
+    ): #TODO /{user_folder}/document_parser/{filename}/{original} 
         files_form = []
         for file in files:
             file_content = file.file.read()
@@ -135,19 +133,44 @@ class Uploader(ABC):
             file_links.append(share_link)
             
         return file_links
+
+
+class Translator(ABC):
+    def __init__(self):
+        self.TRANSLATOR_ENDPOINT = settings.TRANSLATOR_ENDPOINT
+    
+    def translate_text(self,text:str,src_lang:str,target_lang:str):
+        resp = requests.post(
+            url=self.TRANSLATOR_ENDPOINT,
+            json={
+                'text':text,
+                'with_dict':False,
+                'source_language':src_lang,
+                'target_language':target_lang
+            }
+        )
         
+        if resp.status_code != 200:
+           translated_text = resp.json()['detail']
+        else:
+            translated_text = resp.json()['text']
+
+        return translated_text
+    
 class Parser(
     Uploader,
-    TaskManager
+    TaskManager,
+    Translator
 ):
     def __init__(self):
         self.LANGS = settings.ALLOWED_LANGS
         self.TASK_MANAGER_ENDPOINT = settings.TASK_MANAGER_ENDPOINT
+        self.TRANSLATOR_ENDPOINT = settings.TRANSLATOR_ENDPOINT
     
     async def parse(self,
                     file_share_link:str,
                     TASK_KEY:str,
-                    parse_request:ParseRequest = None,
+                    parse_request:ParseRequest,
         ):
         """
             Cyrillic is only compatible with English, try lang_list=["ru","rs_cyrillic","be","bg","uk","mn","en"]
@@ -218,7 +241,7 @@ class Parser(
                 filename=parse_file_filename,
                 )
             ]
-        )
+        )[0]
 
         resp_update_progress = await self.update_progress(
             key=TASK_KEY,
@@ -254,9 +277,9 @@ class Parser(
                 status=TaskStatus.PROCESSING,
             )
         )
-        
-        translate_file_filename = f"parse_{file_share_link.split('/')[-1].split('.')[0]}.md"
-        translate_file_bytes=copy_document.document.export_to_markdown(
+
+        translate_file_filename = f"translate_{file_share_link.split('/')[-1].split('.')[0]}_{parse_request.target_lang}.md"
+        translate_file_bytes=copy_document.export_to_markdown(
             image_mode=ImageRefMode.EMBEDDED,
         ).encode('utf-8')
         
@@ -266,7 +289,7 @@ class Parser(
                 filename=translate_file_filename,
                 )
             ]
-        )
+        )[0]
         
         resp_update_progress = await self.update_progress(
             key=TASK_KEY,
@@ -277,7 +300,7 @@ class Parser(
         )
         
         return {
-            "parse_file_share_link":parse_file_share_link[0],
-            "translated_file_share_link":translate_file_share_link[0],
+            "parse_file_share_link":parse_file_share_link,
+            "translated_file_share_link":translate_file_share_link,
         }
     
