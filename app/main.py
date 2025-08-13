@@ -1,13 +1,8 @@
 import uvicorn
-from pathlib import Path
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from settings import settings
 from parser.router import router
-
-# os.environ['PYTORCH_CUDA_ALLOC_CONF']='expandable_segments:True'
-# os.environ['USE_PYTORCH_KERNEL_CACHE'] = '0'
 
 app=FastAPI(
     title="Sova-Parser",
@@ -53,7 +48,6 @@ ALLOWED_LANGS: List[str] = ["ru","en","ar","fr","uk"] # Согласно ста�
 
 ### Дополнительные опции
 - Перевод
-
 
 ### Remark
  - В директории `/documents` лежат файлы-пробники для наглядной работы сервиса.

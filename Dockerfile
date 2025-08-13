@@ -15,6 +15,6 @@ RUN poetry add opencv-python-headless
 
 COPY . .
 
-EXPOSE 5000
+EXPOSE 1338
 
 ENTRYPOINT ["python3","app/main.py"] 
