@@ -1,7 +1,12 @@
-from fastapi import APIRouter,UploadFile,File,Form,Header,Request
+from fastapi import (
+    APIRouter,
+    UploadFile,
+    File,
+    Request,
+    Form
+)
 from typing import List
 from settings import settings
-from fastapi.responses import FileResponse
 from uuid import uuid4
 from .schemas import (
     ParseRequest,
@@ -23,6 +28,7 @@ from datetime import datetime
 from pathlib import Path
 
 router = APIRouter(prefix="/parser")
+
 uploader = Uploader()
 taskManager = TaskManager()
 parser = Parser()
@@ -30,22 +36,54 @@ parser = Parser()
 @router.post(
     path="/parse",
     name="Парсинг",
+    summary="Парсинг и опциональный перевод загруженных файлов",
+    description="""
+# Загрузка документов
+### Загружает выбранные документы в S3 MiniO:
+ - [Дерево директорий]
+### Входные данные: 
+ - **files** `files[]` - выбранные документы документы
+ - **translated** `str` - True/False - необходимость перевода
+ - **src_lang** `str` - исходный язык
+ - **target_lang** `str` - целевой язык
+ - **max_num_page** `str` - предельное кол-во исследуемых страниц
+### Выходные данные (share-линки к обработанным документам в S3 MiniO):
+ - ```python
+    [
+        {
+            "file_1":{
+                "parse_file_share_link":"parse_file_share_link_1",
+                "translated_file_share_link":"translate_file_share_link_1",
+            }
+        },
+        {
+            "file_2":{
+                "parse_file_share_link":"parse_file_share_link_2",
+                "translated_file_share_link":"translate_file_share_link_2",
+            }
+        },
+    ]
+    ```     
+""",
+    tags=['Parser']
 )
 async def parse(
     request: Request,
     files: List[UploadFile],
-    parse_params: ParseRequest = None,
+    translated:str = Form(...),
+    src_lang:str = Form(...),
+    target_lang:str = Form(...),
+    max_num_page: str = Form(...) 
 ):
     USER_ID = request.headers.get("X-UserID","guest")
     SERVICE_NAME = settings.SERVICE_NAME
-      
-    # parse_request = ParseRequest(
-    #     translated=bool(parse_params['translated'] if str(parse_params['translated']).lower() in ['true','false'] else False), 
-    #     src_lang=parse_params['src_lang'],
-    #     target_lang=parse_params['target_lang'],   
-                    
-    #     max_num_page=parse_params['max_num_page'],
-    # )
+
+    parse_request = ParseRequest(
+        translated=bool(translated if str(translated).lower() in ['true','false'] else False), 
+        src_lang=src_lang,
+        target_lang=target_lang,
+        max_num_page=int(max_num_page),
+    )
     
     if len(files) == 0:
         raise BadRequestError("Загрузите файлы для обработки")
@@ -56,7 +94,7 @@ async def parse(
     
     file_share_links = uploader.upload_to_s3_cloud(files=files)
     
-    body_resp = {}
+    body_resp = []
     for file_share_link in file_share_links:
     
         TASK_ID = str(uuid4())
@@ -70,7 +108,7 @@ async def parse(
             user_id=USER_ID,
             progress=Progress(
                 progress=0.1,
-                status=TaskStatus.PENGING,
+                status=TaskStatus.PROCESSING,
                 )    
             )                    
         )
@@ -78,9 +116,9 @@ async def parse(
         extract_response = await parser.parse(
             file_share_link=file_share_link,
             TASK_KEY=TASK_KEY,
-            # parse_request=parse_request,
+            parse_request=parse_request,
         )
         
-        body_resp.update({'file':extract_response})   
+        body_resp.append({'file':extract_response})   
     
     return body_resp                        
