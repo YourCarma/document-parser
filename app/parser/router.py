@@ -1,12 +1,13 @@
 from fastapi import (
     APIRouter,
     UploadFile,
-    File,
     Request,
     Form
 )
+import json
 from typing import List
 from settings import settings
+from .utils import utils
 from uuid import uuid4
 from .schemas import (
     ParseRequest,
@@ -23,9 +24,6 @@ from .exceptions import (
     BadRequestError,
     ContentNotSupportedError
 )
-
-from datetime import datetime
-from pathlib import Path
 
 router = APIRouter(prefix="/parser")
 
@@ -75,6 +73,7 @@ async def parse(
     target_lang:str = Form(...),
     max_num_page: str = Form(...) 
 ):
+    
     USER_ID = request.headers.get("X-UserID","guest")
     SERVICE_NAME = settings.SERVICE_NAME
 
@@ -91,7 +90,7 @@ async def parse(
     for file in files:
         if not uploader.validate(file.content_type):
             raise ContentNotSupportedError(detail=f"Тип контента:{file.content_type} не поддерживается сервисом")
-    
+
     file_share_links = uploader.upload_to_s3_cloud(files=files)
     
     body_resp = []
@@ -113,12 +112,36 @@ async def parse(
             )                    
         )
                 
-        extract_response = await parser.parse(
+        resp_update_response_data = await taskManager.update_response_data(
+            key=TASK_KEY,
+            response_data=json.dumps({
+                "message":f"Принял файл {str(file_share_link).split("/")[-1]} в обработку",
+            }),
+        )        
+                
+        parse_response = await parser.parse(
             file_share_link=file_share_link,
             TASK_KEY=TASK_KEY,
             parse_request=parse_request,
         )
         
-        body_resp.append({'file':extract_response})   
+        resp_update_progress = await taskManager.update_progress(
+            key=TASK_KEY,
+            progress=Progress(
+                progress=1.0,
+                status=TaskStatus.READY,
+            )
+        )
+        
+        filename = utils.extract_filename(file_share_link,ext=True)
+        
+        resp_update_response_data = await taskManager.update_response_data(
+            key=TASK_KEY,
+            response_data=json.dumps({
+                "message":f"Завершил обработку файла {filename}"
+            })
+        )
+        
+        body_resp.append({filename:parse_response})   
     
     return body_resp                        

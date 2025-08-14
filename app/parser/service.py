@@ -1,7 +1,7 @@
 from settings import settings
+from .utils import utils
 import requests
-from uuid import uuid4
-from io import BytesIO
+import json
 from fastapi import UploadFile,File
 from .schemas import (
     ParseRequest,
@@ -97,16 +97,10 @@ class Uploader(ABC):
         self,
         files: list[UploadFile] = File(...),
     ): #TODO /{user_folder}/document_parser/{filename}/{original} 
-        files_form = []
-        for file in files:
-            file_content = file.file.read()
-            files_form.append(
-                ("files", (file.filename, file_content, file.content_type))
-            )
-            file.file.seek(0)
+        files_form = utils.compare_files(files=files)
         
         resp = requests.put(
-            url=settings.S3_CLOUD_ENDPOINT+f"/cloud/{settings.CLOUD_BUCKET_NAME}/file/upload",
+            url=f"{settings.S3_CLOUD_ENDPOINT}/cloud/{settings.CLOUD_BUCKET_NAME}/file/upload",
             files=files_form,
         )  
         
@@ -126,7 +120,7 @@ class Uploader(ABC):
             )        
             
             if resp.status_code != 200:
-                raise InternalServerError(detail=f"Ошибка получение share-линки файла {file.filename} в корзине {settings.CLOUD_BUCKET_NAME}")
+                raise InternalServerError(detail=f"Ошибка получения share-линки файла {file.filename} в корзине {settings.CLOUD_BUCKET_NAME}")
 
             share_link = settings.MINIO_ENDPOINT + str(resp.json()['message']).split("?")[0]
             
@@ -151,9 +145,9 @@ class Translator(ABC):
         )
         
         if resp.status_code != 200:
-           translated_text = resp.json()['detail']
-        else:
-            translated_text = resp.json()['text']
+           translated_text = f"Ошибка перевода: {resp.json()['detail']}"
+
+        translated_text = resp.json()['text']
 
         return translated_text
     
@@ -163,7 +157,6 @@ class Parser(
     Translator
 ):
     def __init__(self):
-        self.LANGS = settings.ALLOWED_LANGS
         self.TASK_MANAGER_ENDPOINT = settings.TASK_MANAGER_ENDPOINT
         self.TRANSLATOR_ENDPOINT = settings.TRANSLATOR_ENDPOINT
     
@@ -172,17 +165,18 @@ class Parser(
                     TASK_KEY:str,
                     parse_request:ParseRequest,
         ):
+        
         """
-            Cyrillic is only compatible with English, try lang_list=["ru","rs_cyrillic","be","bg","uk","mn","en"]
-            Arabic is only compatible with English, try lang_list=["ar","fa","ur","ug","en"]
-        """                
-    
+            ru && en -> ["ru","rs_cyrillic","be","bg","uk","mn","en"]
+            ar && en -> ["ar","fa","ur","ug","en"]
+        """     
+        lang_option = utils.get_langs(param=parse_request.src_lang if parse_request.src_lang is not None else None)
+        
         ocr_options = EasyOcrOptions(
-            # lang=self.LANGS,
-            lang=["ar","fa","ur","ug","en"],
+            lang=lang_option,
             force_full_page_ocr=True,
             model_storage_directory=settings.ML_DIR,
-            download_enabled=False,   
+            download_enabled=False,
         )
         
         pipeline_options = PdfPipelineOptions()
@@ -222,6 +216,16 @@ class Parser(
             raises_on_error=True,
         )   
         
+        orig_filename = utils.extract_filename(file_share_link,ext=False)
+        orig_filename_with_ext = utils.extract_filename(file_share_link,ext=True)
+        
+        resp_update_response_data = await self.update_response_data(
+            key=TASK_KEY,
+            response_data=json.dumps({
+                "message": f"Подготовил конвертер для файла {orig_filename_with_ext}"
+            })
+        )
+        
         resp_update_progress = await self.update_progress(
             key=TASK_KEY,
             progress=Progress(
@@ -230,17 +234,16 @@ class Parser(
             )
         )
 
-        parse_file_filename = f"parse_{file_share_link.split('/')[-1].split('.')[0]}.md"
+        parse_file_filename = f"parse_{orig_filename}.md"
         parse_file_bytes=conv_result.document.export_to_markdown(
             image_mode=ImageRefMode.EMBEDDED,
         ).encode('utf-8')
         
         parse_file_share_link = self.upload_to_s3_cloud(
-            files=[UploadFile(
-                file=BytesIO(parse_file_bytes),
-                filename=parse_file_filename,
-                )
-            ]
+            files=utils.build_files(
+                file_bytes=parse_file_bytes,
+                file_filename=parse_file_filename,
+            )
         )[0]
 
         resp_update_progress = await self.update_progress(
@@ -249,6 +252,13 @@ class Parser(
                 progress=0.66,
                 status=TaskStatus.PROCESSING,
             )
+        )
+        
+        resp_update_response_data = await self.update_response_data(
+            key=TASK_KEY,
+            response_data=json.dumps({
+                "message":f"Обработал и загрузил новый файл {parse_file_filename} в MiniO"
+            })
         )
         
         if parse_request.translated:
@@ -270,6 +280,18 @@ class Parser(
                         target_lang=parse_request.target_lang,
                     )
         
+        translate_file_filename = f"translate_{orig_filename}_{parse_request.target_lang}.md"
+        translate_file_bytes=copy_document.export_to_markdown(
+            image_mode=ImageRefMode.EMBEDDED,
+        ).encode('utf-8')
+        
+        translate_file_share_link = self.upload_to_s3_cloud(
+            files=utils.build_files(
+                file_bytes=translate_file_bytes,
+                file_filename=translate_file_filename,
+            )
+        )[0]
+        
         resp_update_progress = await self.update_progress(
             key=TASK_KEY,
             progress=Progress(
@@ -277,26 +299,12 @@ class Parser(
                 status=TaskStatus.PROCESSING,
             )
         )
-
-        translate_file_filename = f"translate_{file_share_link.split('/')[-1].split('.')[0]}_{parse_request.target_lang}.md"
-        translate_file_bytes=copy_document.export_to_markdown(
-            image_mode=ImageRefMode.EMBEDDED,
-        ).encode('utf-8')
         
-        translate_file_share_link = self.upload_to_s3_cloud(
-            files=[UploadFile(
-                file=BytesIO(translate_file_bytes),
-                filename=translate_file_filename,
-                )
-            ]
-        )[0]
-        
-        resp_update_progress = await self.update_progress(
+        resp_update_response_data = await self.update_response_data(
             key=TASK_KEY,
-            progress=Progress(
-                progress=1.0,
-                status=TaskStatus.READY,
-            )
+            response_data=json.dumps({
+                "message":f"Перевел и загрузил новый файл {translate_file_filename} в MiniO"
+            })
         )
         
         return {
