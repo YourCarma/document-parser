@@ -43,16 +43,16 @@ class TaskManager(ABC):
             json={
                 "key":key,
                 "task":{
-                    "created_at":datetime.now(timezone.utc).isoformat(),
+                    "created_at":datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
                     "progress":{
                         "progress":task.progress.progress,
                         "status":task.progress.status,
                     },
                     "response_data":"",
                     "service":self.SERVICE_NAME,
-                    "task_id":str(task.task_id),
-                    "updated_at":datetime.now(timezone.utc).isoformat(),
-                    "user_id":str(task.user_id),
+                    "task_id":task.task_id,
+                    "updated_at":datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+                    "user_id":task.user_id,
                 },
             }
         )
@@ -90,13 +90,10 @@ class Uploader(ABC):
             return False
         return True
     
-    # def create_directory_tree():
-    #     pass
-    
     def upload_to_s3_cloud(
         self,
         files: list[UploadFile] = File(...),
-    ): #TODO /{user_folder}/document_parser/{filename}/{original} 
+    ):
         files_form = utils.compare_files(files=files)
         
         resp = requests.put(
@@ -221,9 +218,7 @@ class Parser(
         
         resp_update_response_data = await self.update_response_data(
             key=TASK_KEY,
-            response_data=json.dumps({
-                "message": f"Подготовил конвертер для файла {orig_filename_with_ext}"
-            })
+            response_data=utils.get_response_data(body=f"Подготовил конвертер для файла {orig_filename_with_ext}")
         )
         
         resp_update_progress = await self.update_progress(
@@ -234,7 +229,7 @@ class Parser(
             )
         )
 
-        parse_file_filename = f"parse_{orig_filename}.md"
+        parse_file_filename = f"parse_{orig_filename}.{settings.OUTPUT_FORMAT}"
         parse_file_bytes=conv_result.document.export_to_markdown(
             image_mode=ImageRefMode.EMBEDDED,
         ).encode('utf-8')
@@ -256,9 +251,7 @@ class Parser(
         
         resp_update_response_data = await self.update_response_data(
             key=TASK_KEY,
-            response_data=json.dumps({
-                "message":f"Обработал и загрузил новый файл {parse_file_filename} в MiniO"
-            })
+            response_data=utils.get_response_data(body=f"Обработал и загрузил новый файл {parse_file_filename} в MiniO")
         )
         
         if parse_request.translated:
@@ -280,7 +273,7 @@ class Parser(
                         target_lang=parse_request.target_lang,
                     )
         
-        translate_file_filename = f"translate_{orig_filename}_{parse_request.target_lang}.md"
+        translate_file_filename = f"translate_{orig_filename}_{parse_request.target_lang}.{settings.OUTPUT_FORMAT}"
         translate_file_bytes=copy_document.export_to_markdown(
             image_mode=ImageRefMode.EMBEDDED,
         ).encode('utf-8')
@@ -302,12 +295,12 @@ class Parser(
         
         resp_update_response_data = await self.update_response_data(
             key=TASK_KEY,
-            response_data=json.dumps({
-                "message":f"Перевел и загрузил новый файл {translate_file_filename} в MiniO"
-            })
+            response_data=utils.get_response_data(body=f"Перевел и загрузил новый файл {translate_file_filename} в MiniO"),
         )
         
+        
         return {
+            "original_file_share_link":file_share_link,
             "parse_file_share_link":parse_file_share_link,
             "translated_file_share_link":translate_file_share_link,
         }

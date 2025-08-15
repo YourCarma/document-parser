@@ -16,14 +16,16 @@
     [
         {
             "file_1":{
-                "parse_file_share_link":"parse_file_share_link_1",
-                "translated_file_share_link":"translate_file_share_link_1",
+                "original_file_share_link":"file_share_link",
+                "parse_file_share_link":"parse_file_share_link",
+                "translated_file_share_link":"translate_file_share_link",
             }
         },
         {
             "file_2":{
-                "parse_file_share_link":"parse_file_share_link_2",
-                "translated_file_share_link":"translate_file_share_link_2",
+                "original_file_share_link":"file_share_link",
+                "parse_file_share_link":"parse_file_share_link",
+                "translated_file_share_link":"translate_file_share_link",
             }
         },
     ]

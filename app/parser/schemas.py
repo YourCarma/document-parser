@@ -1,8 +1,5 @@
 from pydantic import BaseModel,Field
 from enum import Enum
-from typing import Dict,List
-from datetime import datetime
-from typing import Optional,Dict,Any
 
 class ParseRequest(BaseModel):
     translated:bool = Field(...,title="Флажок перевода")
@@ -11,16 +8,14 @@ class ParseRequest(BaseModel):
     max_num_page: int = Field(...,title="Кол-во страниц для распознавания")
 
 class Progress(BaseModel):
-    progress: float = 0.0 # значение от 0.0 до 1.0
-    status: str = "PENDING"
+    progress: float
+    status: str
         
 class Task(BaseModel):
     task_id: str
     user_id: str
-    # created_at: datetime
-    # updated_at: datetime
     progress: Progress
-    response_data: Optional[Dict[str,Any]] = None 
+    response_data: str 
 
 class TaskStatus(Enum):
    PENGING="PENDING"

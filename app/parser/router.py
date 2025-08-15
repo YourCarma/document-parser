@@ -4,7 +4,6 @@ from fastapi import (
     Request,
     Form
 )
-import json
 from typing import List
 from settings import settings
 from .utils import utils
@@ -50,14 +49,16 @@ parser = Parser()
     [
         {
             "file_1":{
-                "parse_file_share_link":"parse_file_share_link_1",
-                "translated_file_share_link":"translate_file_share_link_1",
+                "original_file_share_link":file_share_link,
+                "parse_file_share_link":parse_file_share_link,
+                "translated_file_share_link":translate_file_share_link,
             }
         },
         {
             "file_2":{
-                "parse_file_share_link":"parse_file_share_link_2",
-                "translated_file_share_link":"translate_file_share_link_2",
+                "original_file_share_link":file_share_link,
+                "parse_file_share_link":parse_file_share_link,
+                "translated_file_share_link":translate_file_share_link,
             }
         },
     ]
@@ -85,7 +86,7 @@ async def parse(
     )
     
     if len(files) == 0:
-        raise BadRequestError("Загрузите файлы для обработки")
+        raise BadRequestError(detail="Загрузите файлы для обработки")
     
     for file in files:
         if not uploader.validate(file.content_type):
@@ -95,7 +96,9 @@ async def parse(
     
     body_resp = []
     for file_share_link in file_share_links:
-    
+        
+        filename = utils.extract_filename(file_share_link,ext=True)
+        
         TASK_ID = str(uuid4())
         
         TASK_KEY = f"{USER_ID}:{SERVICE_NAME}:{TASK_ID}"
@@ -114,9 +117,7 @@ async def parse(
                 
         resp_update_response_data = await taskManager.update_response_data(
             key=TASK_KEY,
-            response_data=json.dumps({
-                "message":f"Принял файл {str(file_share_link).split("/")[-1]} в обработку",
-            }),
+            response_data=utils.get_response_data(body=f"Принял файл {filename} в обработку"),
         )        
                 
         parse_response = await parser.parse(
@@ -133,13 +134,9 @@ async def parse(
             )
         )
         
-        filename = utils.extract_filename(file_share_link,ext=True)
-        
         resp_update_response_data = await taskManager.update_response_data(
             key=TASK_KEY,
-            response_data=json.dumps({
-                "message":f"Завершил обработку файла {filename}"
-            })
+            response_data=utils.get_response_data(body=f"Завершил обработку файла {filename}")
         )
         
         body_resp.append({filename:parse_response})   

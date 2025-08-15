@@ -1,5 +1,6 @@
 from fastapi import UploadFile
 from io import BytesIO
+import json
 
 class Utils:
     @staticmethod
@@ -43,6 +44,10 @@ class Utils:
                 filename=file_filename,
                 )
             ]
+    
+    @staticmethod
+    def get_response_data(body:str):
+        return json.dumps({"message":body})
         
 
 
