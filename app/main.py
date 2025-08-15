@@ -27,10 +27,10 @@ ALLOWED_MIME_TYPES: List[str] = [
     "text/html",
 ]
 ```
+
  - `jpeg`,`jpg`,`webp` - Изображения
  - `doc`,`docx`,`odt` - Текстовые документы
  - `pdf`,`html` - Другие форматы
-
 
 ### Поддерживаемые языки:
 ```python 

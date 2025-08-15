@@ -36,8 +36,7 @@ parser = Parser()
     summary="Парсинг и опциональный перевод загруженных файлов",
     description="""
 # Загрузка документов
-### Загружает выбранные документы в S3 MiniO:
- - [Дерево директорий]
+### Загружает выбранные документы в S3 MiniO, обрабатывает, при необходимости перевод и выдает share-линки на эти документы:
 ### Входные данные: 
  - **files** `files[]` - выбранные документы документы
  - **translated** `str` - True/False - необходимость перевода
@@ -90,7 +89,7 @@ async def parse(
     
     for file in files:
         if not uploader.validate(file.content_type):
-            raise ContentNotSupportedError(detail=f"Тип контента:{file.content_type} не поддерживается сервисом")
+            raise ContentNotSupportedError(detail=f"Тип файла {file.filename} не поддерживается сервисом")
 
     file_share_links = uploader.upload_to_s3_cloud(files=files)
     
@@ -111,7 +110,8 @@ async def parse(
             progress=Progress(
                 progress=0.1,
                 status=TaskStatus.PROCESSING,
-                )    
+            ),
+            response_data="",    
             )                    
         )
                 

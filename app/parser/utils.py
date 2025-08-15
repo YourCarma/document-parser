@@ -22,7 +22,7 @@ class Utils:
                 ("files", (file.filename, file_content, file.content_type))
             )
             file.file.seek(0)
-            
+        
         return files_form
     
     @staticmethod

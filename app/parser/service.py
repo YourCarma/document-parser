@@ -48,7 +48,7 @@ class TaskManager(ABC):
                         "progress":task.progress.progress,
                         "status":task.progress.status,
                     },
-                    "response_data":"",
+                    "response_data":task.response_data,
                     "service":self.SERVICE_NAME,
                     "task_id":task.task_id,
                     "updated_at":datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
@@ -143,8 +143,8 @@ class Translator(ABC):
         
         if resp.status_code != 200:
            translated_text = f"Ошибка перевода: {resp.json()['detail']}"
-
-        translated_text = resp.json()['text']
+        else:
+            translated_text = resp.json()['text']
 
         return translated_text
     
