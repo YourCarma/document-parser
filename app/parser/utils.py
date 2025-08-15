@@ -1,6 +1,5 @@
 from fastapi import UploadFile
 from io import BytesIO
-import json
 
 class Utils:
     @staticmethod
@@ -45,10 +44,4 @@ class Utils:
                 )
             ]
     
-    @staticmethod
-    def get_response_data(body:str):
-        return json.dumps({"message":body})
-        
-
-
 utils = Utils()

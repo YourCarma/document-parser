@@ -4,6 +4,7 @@ from fastapi import (
     Request,
     Form
 )
+from datetime import timezone,datetime
 from typing import List
 from settings import settings
 from .utils import utils
@@ -12,7 +13,8 @@ from .schemas import (
     ParseRequest,
     Task,
     TaskStatus,
-    Progress
+    Progress,
+    ResponseData,
 )
 from .service import (
     Parser,
@@ -91,7 +93,9 @@ async def parse(
         if not uploader.validate(file.content_type):
             raise ContentNotSupportedError(detail=f"Тип файла {file.filename} не поддерживается сервисом")
 
-    file_share_links = uploader.upload_to_s3_cloud(files=files)
+    file_share_links = uploader.upload_to_s3_cloud(
+        files=files,
+    )
     
     body_resp = []
     for file_share_link in file_share_links:
@@ -105,19 +109,21 @@ async def parse(
         storage_task_response = await taskManager.storage_task(
             key=TASK_KEY,
             task=Task(
-            task_id=TASK_ID,
-            user_id=USER_ID,
-            progress=Progress(
-                progress=0.1,
-                status=TaskStatus.PROCESSING,
-            ),
-            response_data="",    
+                task_id=TASK_ID,
+                user_id=USER_ID,
+                progress=Progress(
+                    progress=0.1,
+                    status=TaskStatus.PROCESSING,
+                ),
+                created_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+                updated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+                response_data="",    
             )                    
         )
                 
         resp_update_response_data = await taskManager.update_response_data(
             key=TASK_KEY,
-            response_data=utils.get_response_data(body=f"Принял файл {filename} в обработку"),
+            response_data=ResponseData(message=f"Принял файл {filename} в обработку"),
         )        
                 
         parse_response = await parser.parse(
@@ -136,7 +142,7 @@ async def parse(
         
         resp_update_response_data = await taskManager.update_response_data(
             key=TASK_KEY,
-            response_data=utils.get_response_data(body=f"Завершил обработку файла {filename}")
+            response_data=ResponseData(message=f"Завершил обработку файла {filename}")
         )
         
         body_resp.append({filename:parse_response})   

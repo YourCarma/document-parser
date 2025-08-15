@@ -1,15 +1,19 @@
 from settings import settings
 from .utils import utils
 import requests
-import json
-from fastapi import UploadFile,File
+from fastapi import (
+    UploadFile,
+    File
+)
 from .schemas import (
     ParseRequest,
     Task,
     Progress,
     TaskStatus,
+    ResponseData,
+    TranslateRequest,
+    FileShareLinkRequest
 )
-from datetime import datetime,timezone
 from abc import ABC
 from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
 from docling.datamodel.base_models import InputFormat
@@ -25,11 +29,21 @@ from docling.datamodel.pipeline_options import (
 from .exceptions import (
     InternalServerError
 )
-from docling_core.types.doc import PictureItem, TableItem
+from docling_core.types.doc import (
+    TableItem,
+    PictureItem,
+)
 from docling.pipeline.simple_pipeline import SimplePipeline
 from docling.pipeline.standard_pdf_pipeline import StandardPdfPipeline
-from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
-from docling_core.types.doc import ImageRefMode, TableItem, TextItem
+from docling.datamodel.accelerator_options import (
+    AcceleratorDevice,
+    AcceleratorOptions
+)
+from docling_core.types.doc import (
+    ImageRefMode, 
+    TableItem,
+    TextItem
+)
 
 class TaskManager(ABC):
     
@@ -37,47 +51,34 @@ class TaskManager(ABC):
         self.SERVICE_NAME = settings.SERVICE_NAME
         self.TASK_MANAGER_ENDPOINT = settings.TASK_MANAGER_ENDPOINT
     
-    async def storage_task(self,key:str,task:Task):
+    async def storage_task(self,key:str,task:Task):           
         resp = requests.post(
             url=self.TASK_MANAGER_ENDPOINT+"/storage/task",
             json={
                 "key":key,
-                "task":{
-                    "created_at":datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-                    "progress":{
-                        "progress":task.progress.progress,
-                        "status":task.progress.status,
-                    },
-                    "response_data":task.response_data,
-                    "service":self.SERVICE_NAME,
-                    "task_id":task.task_id,
-                    "updated_at":datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-                    "user_id":task.user_id,
-                },
+                "task":task.model_dump(),
             }
         )
         return resp.json()
-        
+         
+    
     async def update_progress(self,key:str,progress: Progress):
         resp = requests.patch(
             url=self.TASK_MANAGER_ENDPOINT+"/storage/update_progress",
             json={
                 "key":key,
-                "progress":{
-                    "progress":progress.progress,
-                    "status":progress.status,
-                },
+                "progress":progress.model_dump(),
             }
         )
         return resp.json()
         
 
-    async def update_response_data(self,key:str,response_data:str):
+    async def update_response_data(self,key:str,response_data:ResponseData):
         resp = requests.patch(
             url=self.TASK_MANAGER_ENDPOINT+"/storage/update_response_data",
             json={
                 "key":key,
-                "response_data":response_data
+                "response_data":response_data.model_dump_json(),
             }
         )
         return resp.json()
@@ -108,12 +109,12 @@ class Uploader(ABC):
         for file in files:
             resp = requests.post(
                 url=settings.S3_CLOUD_ENDPOINT+f"/cloud/{settings.CLOUD_BUCKET_NAME}/file/share",
-                json={
-                    'dir_path': '/',
-                    'expired_secs':3600,
-                    'file_name': file.filename,
-                    'only_relative_path':True,
-                }
+                json=FileShareLinkRequest(
+                    dir_path='/',
+                    expired_secs=3600,
+                    file_name=file.filename,
+                    only_relative_path=True,  
+                ).model_dump(),
             )        
             
             if resp.status_code != 200:
@@ -130,15 +131,10 @@ class Translator(ABC):
     def __init__(self):
         self.TRANSLATOR_ENDPOINT = settings.TRANSLATOR_ENDPOINT
     
-    def translate_text(self,text:str,src_lang:str,target_lang:str):
+    def translate_text(self,translateReq:TranslateRequest):
         resp = requests.post(
             url=self.TRANSLATOR_ENDPOINT,
-            json={
-                'text':text,
-                'with_dict':False,
-                'source_language':src_lang,
-                'target_language':target_lang
-            }
+            json=translateReq.model_dump(),
         )
         
         if resp.status_code != 200:
@@ -167,6 +163,7 @@ class Parser(
             ru && en -> ["ru","rs_cyrillic","be","bg","uk","mn","en"]
             ar && en -> ["ar","fa","ur","ug","en"]
         """     
+        
         lang_option = utils.get_langs(param=parse_request.src_lang if parse_request.src_lang is not None else None)
         
         ocr_options = EasyOcrOptions(
@@ -218,7 +215,7 @@ class Parser(
         
         resp_update_response_data = await self.update_response_data(
             key=TASK_KEY,
-            response_data=utils.get_response_data(body=f"Подготовил конвертер для файла {orig_filename_with_ext}")
+            response_data=ResponseData(message=f"Подготовил конвертер для файла {orig_filename_with_ext}")
         )
         
         resp_update_progress = await self.update_progress(
@@ -251,7 +248,7 @@ class Parser(
         
         resp_update_response_data = await self.update_response_data(
             key=TASK_KEY,
-            response_data=utils.get_response_data(body=f"Обработал и загрузил новый файл {parse_file_filename} в MiniO")
+            response_data=ResponseData(message=f"Обработал и загрузил новый файл {parse_file_filename} в MiniO")
         )
         
         if parse_request.translated:
@@ -295,9 +292,8 @@ class Parser(
         
         resp_update_response_data = await self.update_response_data(
             key=TASK_KEY,
-            response_data=utils.get_response_data(body=f"Перевел и загрузил новый файл {translate_file_filename} в MiniO"),
+            response_data=ResponseData(message=f"Перевел и загрузил новый файл {translate_file_filename} в MiniO"),
         )
-        
         
         return {
             "original_file_share_link":file_share_link,
