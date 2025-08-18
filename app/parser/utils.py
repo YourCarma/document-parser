@@ -31,17 +31,13 @@ class Utils:
                 langs = ["ru","rs_cyrillic","be","bg","uk","mn","en"]
             case "ar":
                 langs = ["ar","fa","ur","ug","en"]
-            case None:
+            case None,_:
                 langs = ["ru","rs_cyrillic","be","bg","uk","mn","en"]
 
         return langs 
 
     @staticmethod
     def build_files(file_bytes:bytes,file_filename:str):
-        return [UploadFile(
-                file=BytesIO(file_bytes),
-                filename=file_filename,
-                )
-            ]
+        return [UploadFile(file=BytesIO(file_bytes),filename=file_filename)]
     
 utils = Utils()

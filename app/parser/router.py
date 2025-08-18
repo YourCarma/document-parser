@@ -5,12 +5,13 @@ from fastapi import (
     Form
 )
 from datetime import timezone,datetime
-from typing import List
+from typing import List,Dict
 from settings import settings
 from .utils import utils
 from uuid import uuid4
 from .schemas import (
     ParseRequest,
+    ParseResponse,
     Task,
     TaskStatus,
     Progress,
@@ -46,22 +47,13 @@ parser = Parser()
  - **max_num_page** `str` - предельное кол-во исследуемых страниц
 ### Выходные данные (share-линки к обработанным документам в S3 MiniO):
  - ```python
-    [
-        {
-            "file_1":{
-                "original_file_share_link":file_share_link,
-                "parse_file_share_link":parse_file_share_link,
-                "translated_file_share_link":translate_file_share_link,
-            }
-        },
-        {
-            "file_2":{
-                "original_file_share_link":file_share_link,
-                "parse_file_share_link":parse_file_share_link,
-                "translated_file_share_link":translate_file_share_link,
-            }
-        },
-    ]
+    class ParseFileResult(BaseModel):
+        original_file_share_link:str 
+        parse_file_share_link:str
+        translated_file_share_link:str
+
+    class ParseResponse(BaseModel):
+        results: list[ParseFileResult]
     ```     
 """,
     tags=['Parser']
@@ -73,7 +65,7 @@ async def parse(
     src_lang:str = Form(...),
     target_lang:str = Form(...),
     max_num_page: str = Form(...) 
-):
+) -> ParseResponse:
     
     USER_ID = request.headers.get("X-UserID","guest")
     SERVICE_NAME = settings.SERVICE_NAME
@@ -82,7 +74,7 @@ async def parse(
         raise BadRequestError(detail="Невалидный целевой или текущий язык")
 
     parse_request = ParseRequest(
-        translated=bool(translated if str(translated).lower() in ['true','false'] else False), 
+        translated=bool(True if str(translated).lower() == 'true' else False), 
         src_lang=src_lang,
         target_lang=target_lang,
         max_num_page=int(max_num_page),
@@ -99,7 +91,7 @@ async def parse(
         files=files,
     )
     
-    body_resp = []
+    parse_results = []
     for file_share_link in file_share_links:
         
         filename = utils.extract_filename(file_share_link,ext=True)
@@ -148,6 +140,8 @@ async def parse(
             response_data=f"Завершил обработку файла {filename}"
         )
         
-        body_resp.append({filename:parse_response})   
+        parse_results.append({filename:parse_response})   
     
-    return body_resp                        
+    return ParseResponse(
+        results=parse_results
+    )                        

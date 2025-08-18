@@ -1,16 +1,19 @@
 from pydantic import BaseModel,Field
 from enum import Enum
-
+from typing import List,Dict
 class ParseRequest(BaseModel):
     translated:bool = Field(...,title="Флажок перевода")
     target_lang: str = Field(..., title="Целевой язык", description="🌍 Язык для перевода", example="en")
     src_lang:str = Field(..., title="Исходный язык", description="🌍 Язык документов", example="ru")
     max_num_page: int = Field(...,title="Кол-во страниц для распознавания")
 
-class ParseResponse(BaseModel):
+class ParseFileResult(BaseModel):
     original_file_share_link:str 
     parse_file_share_link:str
     translated_file_share_link:str
+
+class ParseResponse(BaseModel):
+    results: list
 
 class Progress(BaseModel):
     progress: float

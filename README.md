@@ -13,22 +13,13 @@
  - **max_num_page** `str` - предельное кол-во исследуемых страниц
 ##### Выходные данные (share-линки с обработанным документам в S3 MiniO):
  - ```python
-    [
-        {
-            "file_1":{
-                "original_file_share_link":"file_share_link",
-                "parse_file_share_link":"parse_file_share_link",
-                "translated_file_share_link":"translate_file_share_link",
-            }
-        },
-        {
-            "file_2":{
-                "original_file_share_link":"file_share_link",
-                "parse_file_share_link":"parse_file_share_link",
-                "translated_file_share_link":"translate_file_share_link",
-            }
-        },
-    ]
+    class ParseFileResult(BaseModel):
+        original_file_share_link:str 
+        parse_file_share_link:str
+        translated_file_share_link:str
+
+    class ParseResponse(BaseModel):
+        results: list[ParseFileResult]
     ```
 
 ## Features 

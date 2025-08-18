@@ -9,6 +9,7 @@ import json
 from .schemas import (
     ParseRequest,
     ParseResponse,
+    ParseFileResult,
     Task,
     Progress,
     TaskStatus,
@@ -26,6 +27,7 @@ from docling.document_converter import (
 from docling.datamodel.pipeline_options import (
     PdfPipelineOptions,
     EasyOcrOptions,
+    PictureDescriptionApiOptions
 )
 from .exceptions import (
     InternalServerError
@@ -45,8 +47,7 @@ from docling_core.types.doc import (
     TableItem,
     TextItem
 )
-from docling_core.transforms.chunker.hierarchical_chunker import TripletTableSerializer
-from docling_core.transforms.serializer.markdown import MarkdownParams
+
 class TaskManager(ABC):
     
     def __init__(self):
@@ -159,7 +160,7 @@ class Parser(
                     file_share_link:str,
                     TASK_KEY:str,
                     parse_request:ParseRequest,
-        ) -> ParseResponse:
+        ) -> ParseFileResult:
         
         """
             ru && en -> ["ru","rs_cyrillic","be","bg","uk","mn","en"]
@@ -189,6 +190,19 @@ class Parser(
         pipeline_options.do_ocr = True
         pipeline_options.generate_picture_images = True
         pipeline_options.ocr_options = ocr_options
+        
+        # pipeline_options.do_picture_description = True
+        # pipeline_options.enable_remote_services=True
+        # pipeline_options.picture_description_options = PictureDescriptionApiOptions(
+        #     url="http://192.168.0.59:8091/v1",
+        #     params=dict(
+        #         model="LocalModel",
+        #         seed=42,
+        #         max_completion_tokens=200
+        #     ),
+        #     prompt="Что изображено на картинке? Ответь одним предложением",
+        #     timeout=90,
+        # )
 
         format_options = {
             InputFormat.DOCX: WordFormatOption(pipeline_cls=SimplePipeline),
@@ -286,6 +300,11 @@ class Parser(
                 )
             )[0]
         
+            resp_update_response_data = await self.update_response_data(
+                key=TASK_KEY,
+                response_data=f"Перевел и загрузил новый файл {translate_file_filename} в MiniO",
+            )
+            
         resp_update_progress = await self.update_progress(
             key=TASK_KEY,
             progress=Progress(
@@ -294,12 +313,7 @@ class Parser(
             )
         )
         
-        resp_update_response_data = await self.update_response_data(
-            key=TASK_KEY,
-            response_data=f"Перевел и загрузил новый файл {translate_file_filename} в MiniO",
-        )
-        
-        return ParseResponse(
+        return ParseFileResult(
             original_file_share_link=file_share_link,
             parse_file_share_link=parse_file_share_link,
             translated_file_share_link=translate_file_share_link
