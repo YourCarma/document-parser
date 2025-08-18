@@ -14,7 +14,6 @@ from .schemas import (
     Task,
     TaskStatus,
     Progress,
-    ResponseData,
 )
 from .service import (
     Parser,
@@ -79,6 +78,9 @@ async def parse(
     USER_ID = request.headers.get("X-UserID","guest")
     SERVICE_NAME = settings.SERVICE_NAME
 
+    if target_lang not in settings.ALLOWED_LANGS or src_lang not in settings.ALLOWED_LANGS:
+        raise BadRequestError(detail="Невалидный целевой или текущий язык")
+
     parse_request = ParseRequest(
         translated=bool(translated if str(translated).lower() in ['true','false'] else False), 
         src_lang=src_lang,
@@ -115,15 +117,16 @@ async def parse(
                     progress=0.1,
                     status=TaskStatus.PROCESSING,
                 ),
+                service=SERVICE_NAME,
                 created_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
                 updated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-                response_data="",    
+                response_data=f"Инициализировал таск {TASK_KEY}",    
             )                    
         )
                 
         resp_update_response_data = await taskManager.update_response_data(
             key=TASK_KEY,
-            response_data=ResponseData(message=f"Принял файл {filename} в обработку"),
+            response_data=f"Принял файл {filename} в обработку",
         )        
                 
         parse_response = await parser.parse(
@@ -142,7 +145,7 @@ async def parse(
         
         resp_update_response_data = await taskManager.update_response_data(
             key=TASK_KEY,
-            response_data=ResponseData(message=f"Завершил обработку файла {filename}")
+            response_data=f"Завершил обработку файла {filename}"
         )
         
         body_resp.append({filename:parse_response})   

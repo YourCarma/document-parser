@@ -375,14 +375,14 @@ vlm = ["accelerate (>=1.2.1,<2.0.0)", "mlx-vlm (>=0.1.22) ; python_version >= \"
 
 [[package]]
 name = "docling-core"
-version = "2.33.1"
+version = "2.44.2"
 description = "A python library to define and validate data types in Docling."
 optional = false
 python-versions = "<4.0,>=3.9"
 groups = ["main"]
 files = [
-    {file = "docling_core-2.33.1-py3-none-any.whl", hash = "sha256:ad51362fd66450dc69039684b8e7f12fe87d62084c6eafa02729857d95b41b21"},
-    {file = "docling_core-2.33.1.tar.gz", hash = "sha256:eb8c6db697e726fed518df5bc8b854178966a7344dd76383b4a8f00d9aefdd5c"},
+    {file = "docling_core-2.44.2-py3-none-any.whl", hash = "sha256:68216e86a76c97b34309aa173d080b56f98dde2dbd2c32a12596268ed3356b14"},
+    {file = "docling_core-2.44.2.tar.gz", hash = "sha256:de75ee451e62eb211069ce411b143dff463a8d779b23b771a8cde450957ff861"},
 ]
 
 [package.dependencies]
@@ -3730,4 +3730,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "61660a414831cb563626aef39cef97c15e6e09862ad18a1a6203f7c811f00544"
+content-hash = "b14f14e669c3eae4b9dd46ff239559c0796690fffcdf9c6d97b25b15da2da716"

@@ -7,24 +7,27 @@ class ParseRequest(BaseModel):
     src_lang:str = Field(..., title="Исходный язык", description="🌍 Язык документов", example="ru")
     max_num_page: int = Field(...,title="Кол-во страниц для распознавания")
 
+class ParseResponse(BaseModel):
+    original_file_share_link:str 
+    parse_file_share_link:str
+    translated_file_share_link:str
+
 class Progress(BaseModel):
     progress: float
     status: str
 
-class ResponseData(BaseModel):
-    message: str 
-
 class Task(BaseModel):
     task_id: str
     user_id: str
+    service: str
     created_at:str
     updated_at: str
     progress: Progress
-    response_data: ResponseData 
+    response_data: str
 
 class TranslateRequest(BaseModel):
     text: str
-    with_dict: bool
+    with_dict: bool = True
     src_lang: str
     target_lang: str
 
@@ -33,7 +36,7 @@ class FileShareLinkRequest(BaseModel):
     expired_secs: int
     file_name: str
     only_relative_path: bool 
-   
+       
 class TaskStatus(Enum):
    PENGING="PENDING"
    AWAITING="AWAITING"
