@@ -2,7 +2,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from settings import settings
-from parser.router import router
+from api.routers import routers
 
 app=FastAPI(
     title="Sova-Parser",
@@ -65,7 +65,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(router)
+for router in routers:
+    app.include_router(router)
 
 if __name__ == "__main__":  
     uvicorn.run(
