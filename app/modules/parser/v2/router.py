@@ -26,7 +26,7 @@ from .exceptions import (
     ContentNotSupportedError
 )
 
-router = APIRouter(prefix="/parser")
+router = APIRouter(prefix="/v2/parser")
 
 uploader = Uploader()
 taskManager = TaskManager()

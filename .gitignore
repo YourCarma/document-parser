@@ -161,6 +161,8 @@ cython_debug/
 
 # Custom folders
 download/
-ml/FastText/
+ml
 core
 app/notebooks/
+app/test_data
+.env.dev

@@ -1,15 +1,21 @@
-from pydantic_settings import BaseSettings
 from typing import List
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
+env_file_path = Path(__file__).parent.parent.joinpath(".env.dev").__str__()
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=env_file_path)
+
     SERVICE_NAME: str
     HOST: str
     PORT: int
     ML_DIR: str = str(Path(__file__).parent.parent / "ml")
+    
+    VLM_BASE_URL: str = "localhost:8097"
+    VLM_MODEL_NAME: str = "Qwen2.5-VL-7B-Instruct-Q6_K"
+    VLM_API_KEY: str = "no-key-required"
     
     OUTPUT_FORMAT: str
     
@@ -20,7 +26,6 @@ class Settings(BaseSettings):
     
     CLOUD_BUCKET_NAME: str
     
-    ALLOWED_LANGS: List[str] = ["ru","en","ar","fr","uk"] #iso-639
     ALLOWED_MIME_TYPES: List[str] = [
         "image/jpeg",
         "image/webp",
@@ -28,13 +33,11 @@ class Settings(BaseSettings):
         "image/tiff",
         "application/msword",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "application/vnd.oasis.opendocument.text",
         "application/pdf",
         "text/html",
     ]
-    
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
+load_dotenv(env_file_path, override=True)
 settings = Settings()

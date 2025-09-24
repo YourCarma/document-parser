@@ -1,5 +1,7 @@
-from modules.parser.router import router as parser_router
+from modules.parser.v1.router import router as v1_parser_router
+from modules.parser.v2.router import router as v2_parser_router
 
 routers = [
-    parser_router,
+    v1_parser_router,
+    v2_parser_router
 ]
