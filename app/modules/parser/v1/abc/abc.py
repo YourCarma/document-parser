@@ -5,6 +5,9 @@ from PIL.Image import Image
 from modules.parser.v1.schemas import ParserParams
 from docling.document_converter import DocumentConverter
 from loguru import logger
+from docling_core.types.doc import (
+    ImageRefMode
+)
 
 
 class ParserABC(ABC):
@@ -14,6 +17,7 @@ class ParserABC(ABC):
     ):
         self.parser_params = parser_params
         self.source_file = parser_params.file_path
+        self.image_mode = ImageRefMode.EMBEDDED if self.parser_params.include_image_in_output else ImageRefMode.PLACEHOLDER
         self.artifacts_path=Path(__file__).parent.parent.parent.parent.parent.parent.joinpath("ml")
         self.converter = DocumentConverter()
 

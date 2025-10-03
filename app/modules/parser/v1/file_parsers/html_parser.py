@@ -33,14 +33,17 @@ class HTMLParser(ParserABC):
         doc = self.converter.convert(self.parser_params.file_path).document
         logger.success(f"Document converted!")
         logger.debug(f"Exctracting text from images...")
-        for element, _level in doc.iterate_items():
-            if isinstance(element, PictureItem) or isinstance(element, TableItem):
-                logger.success(f"Image or Table detected")
-                image = element.get_image(doc)
-                parser = ImageParser(image)
-                parsed_text = parser.parse_image_for_element(image)
-                doc.insert_text(element, text=parsed_text, orig=parsed_text, label=DocItemLabel.TEXT)
-        markdown = doc.export_to_markdown()
+        if self.parser_params.parse_images:
+            for element, _level in doc.iterate_items():
+                if isinstance(element, PictureItem) or isinstance(element, TableItem):
+                    logger.success(f"Image or Table detected")
+                    image = element.get_image(doc)
+                    parser = ImageParser(image)
+                    parsed_text = parser.parse_image_for_element(image)
+                    doc.insert_text(element, text=parsed_text, orig=parsed_text, label=DocItemLabel.TEXT)
+
+        markdown = doc.export_to_markdown(image_mode=self.image_mode)
+
         doc.save_as_markdown('test.md', image_mode=ImageRefMode.EMBEDDED)
         logger.success("Document have been parsed!")
         return markdown
