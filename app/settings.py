@@ -30,13 +30,14 @@ class Settings(BaseSettings):
         "image/jpeg",
         "image/webp",
         "image/png",
+        "text/html",
         "image/tiff",
         "application/msword",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "application/vnd.oasis.opendocument.text",
         "application/pdf",
-        "text/html",
     ]
 
 load_dotenv(env_file_path, override=True)

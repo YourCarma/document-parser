@@ -15,18 +15,28 @@ from .exceptions import (
     BadRequestError,
     ContentNotSupportedError
 )
-from modules.parser.v1.schemas import ParserRequest
-from modules.parser.v1.service import ParserFactory
+from modules.parser.v1.schemas import ParserRequest, ParserResponse, FileFormats, ParserParams
+from modules.parser.v1.abc.factory import ParserFactory
 from modules.parser.v1.utils import save_file, delete_file
 
 router = APIRouter(prefix="/v1/parser")
 
 @router.post(
     path="/parse",
-    name="Парсинг",
-    summary="Парсинг и опциональный перевод загруженных файлов",
-    description="""   
-""",
+    name="File parsing",
+    summary="Парсинг файлов",
+    description=f"""   
+    ### Парсинг файлов
+  #### Поддерживаемые MIME-типы:
+  ```python 
+  {settings.ALLOWED_MIME_TYPES}
+  ```
+  #### Поддерживаемые форматы:
+  ```python 
+ 
+  ```
+
+    """,
     tags=['Parser']
 )
 async def parse(
@@ -34,9 +44,13 @@ async def parse(
     try: 
         file = parser_data.file
         file_path = await save_file(file)
+        parser_params = ParserParams(file_path=file_path,
+                                     parse_images=parser_data.parse_images,
+                                     include_image_in_output=parser_data.include_image_in_output)
         parser = ParserFactory(file_path).get_parser()
         text = parser.parse()
-        return text
+        instance = ParserResponse(parsed_text=text)
+        return instance
     except Exception as e:
         logger.error(f"Error in request: {e}")
         raise e

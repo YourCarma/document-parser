@@ -1,5 +1,6 @@
-from typing import Optional
+from typing import Optional, Union
 import enum
+from pathlib import Path
 
 from pydantic import BaseModel, field_validator, Field
 from fastapi import UploadFile, File
@@ -8,11 +9,11 @@ from loguru import logger
 from settings import settings
 from modules.parser.v1.exceptions import ContentNotSupportedError
 
+
 class ParserRequest(BaseModel):
     file: UploadFile = File(description="Файл для парсинга")
-
-    class Config:
-        arbitrary_types_allowed = True
+    parse_images: Optional[bool]  = Field(description="Необходимо распознавать вложенные изображения (Необходимо наличие VLM)", default=True)
+    include_image_in_output: Optional[bool] = Field(description="Вшивать изображения в текст вида `base64`", default=True)
     
     @field_validator("file", mode="after")  
     @classmethod
@@ -25,6 +26,8 @@ class ParserRequest(BaseModel):
         logger.success("File MIME type supported!")
         return file
     
+class ParserResponse(BaseModel):
+    parsed_text: str = Field(description="Распознанный текст в формате markdown", examples=["## Heading"])
 
 class DocLingAPIVLMOptionsParams(BaseModel):
     model: str = Field(description="Имя модели VLM")
@@ -37,3 +40,9 @@ class FileFormats(enum.Enum):
     DOC = [".docx"]
     PPTX = [".pptx"]
     XLSX = [".xlsx"]
+    HTML = [".html"]
+
+class ParserParams(BaseModel):
+    file_path: Union[str, Path] = Field(description="Путь к файлу")
+    parse_images: Optional[bool]  = Field(description="Необходимо распознавать вложенные изображения (Необходимо наличие VLM)", default=True)
+    include_image_in_output: Optional[bool] = Field(description="Вшивать изображения в текст вида `base64`", default=True)

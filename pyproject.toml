@@ -18,6 +18,7 @@ dependencies = [
     "docling-core (>=2.44.2,<3.0.0)",
     "loguru (>=0.7.3,<0.8.0)",
     "aiofiles (>=24.1.0,<25.0.0)",
+    "docx2md (>=1.0.4,<2.0.0)",
 ]
 
 

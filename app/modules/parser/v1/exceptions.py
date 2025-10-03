@@ -19,15 +19,23 @@ class ContentNotSupportedError(HTTPException):
     def __init__(self,detail:str):
         logger.error("Current MIME type not supported!")
         super().__init__(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, 
+            status_code=status.HTTP_406_NOT_ACCEPTABLE, 
             detail=detail,
         )
 
 class ServiceUnavailable(HTTPException):
     def __init__(self, service_name: str, service_url: str):
-        logger.error(f"Servie {service_name} at {service_url} unavaialble! Check the connection!")
+        logger.error(f"Servie \"{service_name}\" at {service_url} unavaialble! Check the connection!")
         super().__init__(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, 
-            detail=f"Сервис {service_name} недоступен. Обратитесь к администратору!",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, 
+            detail=f"Сервис \"{service_name}\" недоступен. Обратитесь к администратору.",
+        )
+
+class TimeoutError(HTTPException):
+    def __init__(self):
+        logger.error(f"Timeout error!")
+        super().__init__(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, 
+            detail=f"Время ожидания вышло",
         )
     

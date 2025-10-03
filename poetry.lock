@@ -529,6 +529,25 @@ tabulate = ">=0.9.0,<1.0.0"
 perf-tools = ["pdfplumber (>=0.11.7)", "pymupdf (>=1.26.4)", "pypdfium2 (>=4.30.0)"]
 
 [[package]]
+name = "docx2md"
+version = "1.0.4"
+description = "convert .docx to .md"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "docx2md-1.0.4-py3-none-any.whl", hash = "sha256:b17856de8427327f7e2ace88dfeea8fe8744cb84ea5062716880ac08ba3524d8"},
+    {file = "docx2md-1.0.4.tar.gz", hash = "sha256:c48136106ac7d9b6060942a26d6facaebf45ea20dd198590b5272ebdbec5c701"},
+]
+
+[package.dependencies]
+lxml = "*"
+Pillow = "*"
+
+[package.extras]
+dev = ["build", "twine"]
+
+[[package]]
 name = "easyocr"
 version = "1.7.2"
 description = "End-to-End Multi-Lingual Optical Character Recognition (OCR) Solution"
@@ -3848,4 +3867,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.14"
-content-hash = "dee24c25fa633dbee4af7abc5159db1ee54d46f065f25e54e78adf0330457e0a"
+content-hash = "43aceb48dcabe0a69688b25d6b9e08ae0d073e4dbb5f7194df4b8a14eb7c270c"
