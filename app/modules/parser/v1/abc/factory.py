@@ -18,35 +18,35 @@ class ParserFactory():
         self.HTML_FORMATS = FileFormats.HTML.value
 
     def get_parser(self):
-        if not isinstance(self.source_file, Path):
-            self.source_file = Path(self.source_file)
-        source_file_format = self.source_file.suffix.lower()
+        if not isinstance(self.parser_params.file_path, Path):
+            self.parser_params.file_path = Path(self.parser_params.file_path)
+        source_file_format = self.parser_params.file_path.suffix.lower()
         logger.success(f"Current file format: {source_file_format}")
         logger.debug("Creating Parser...")
         match source_file_format:
             case file_format if file_format in self.IMAGE_FORMATS:
                 logger.debug("Image Parser Created!")
-                return ImageParser(self.source_file)
+                return ImageParser(self.parser_params.file_path)
             
             case file_format if file_format in self.XLSX_FORMATS:
                 logger.debug("XLSX Parser Created!")
-                return XLSXParser(self.source_file)
+                return XLSXParser(self.parser_params)
             
             case file_format if file_format in self.DOC_FORMATS:
                 logger.debug("Doc Parser Created!")
-                return DocParser(self.source_file)
+                return DocParser(self.parser_params)
             
             case file_format if file_format in self.PPTX_FORMATS:
                 logger.debug("PPTX Parser Created!")
-                return PPTXParser(self.source_file)
+                return PPTXParser(self.parser_params)
             
             case file_format if file_format in self.PDF_FORMATS:
                 logger.debug("PDF Parser Created!")
-                return PDFParser(self.source_file)
+                return PDFParser(self.parser_params)
             
             case file_format if file_format in self.HTML_FORMATS:
                 logger.debug("HTML Parser Created!")
-                return HTMLParser(self.source_file)
+                return HTMLParser(self.parser_params)
             
             case _:
                 raise ContentNotSupportedError(f"Формат \"{source_file_format}\" не поддерживается!")

@@ -47,7 +47,7 @@ async def parse(
         parser_params = ParserParams(file_path=file_path,
                                      parse_images=parser_data.parse_images,
                                      include_image_in_output=parser_data.include_image_in_output)
-        parser = ParserFactory(file_path).get_parser()
+        parser = ParserFactory(parser_params).get_parser()
         text = parser.parse()
         instance = ParserResponse(parsed_text=text)
         return instance

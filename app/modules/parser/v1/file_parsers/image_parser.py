@@ -171,6 +171,7 @@ class ImageParser(ParserABC):
             parsed_text = ImageParser(image).parse()
         except TimeoutError as e:
             logger.warning("Timeout error on image parsing...")
+        except Exception as e:
+            logger.error(f"Error while parsing element: {e}")
             parsed_text = "*При парсинге изображения возникла задержка сети*"
-        finally:
-            return parsed_text
+        return parsed_text

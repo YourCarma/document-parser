@@ -166,5 +166,4 @@ core
 app/notebooks/
 app/test_data
 .env.dev
-app/modules/parser/v1/file_parsers/pptx_parser.py
 test.md
