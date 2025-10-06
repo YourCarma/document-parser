@@ -26,21 +26,32 @@ router = APIRouter(prefix="/v1/parser")
     name="File parsing",
     summary="Парсинг файлов",
     description=f"""   
-    ### Парсинг файлов
-  #### Поддерживаемые MIME-типы:
+    ## Парсинг файлов
+  ### Поддерживаемые MIME-типы:
   ```python 
   {settings.ALLOWED_MIME_TYPES}
   ```
-  #### Поддерживаемые форматы:
-  ```python 
- 
-  ```
+  ### Поддерживаемые форматы:
+  
+ * **HTML**: `{FileFormats.DOC.value}`
+ * **PDF**: `{FileFormats.PDF.value}`
+ * **XLSX**: `{FileFormats.XLSX.value}`
+ * **IMAGES**: `{FileFormats.IMAGE.value}`
+ * **HTML**: `{FileFormats.HTML.value}`
+ * **PPTX**: `{FileFormats.PPTX.value}`
+  ### Параметры запроса:
+ 1. `parse_images`: `bool | None` - Необходимо распознавать текст на изображениях (**требуется** подключение к VLM, может занимать больше времени)
+ 2. `include_image_in_output`: `bool | None` - Вшивать изображения исходного документа в **OUTPUT** в виде `base64` (Может излишне нагружать markdown)
 
+  ### Возвращаемый объект:
+ ```python
+ {ParserResponse.model_fields}
+ ``` 
     """,
     tags=['Parser']
 )
 async def parse(
-        parser_data: ParserRequest = Depends()):    
+        parser_data: ParserRequest = Depends()) -> ParserResponse:    
     try: 
         file = parser_data.file
         file_path = await save_file(file)

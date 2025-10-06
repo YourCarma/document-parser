@@ -35,6 +35,7 @@ parser = Parser()
 @router.post(
     path="/parse",
     name="Парсинг",
+    deprecated=True,
     summary="Парсинг и опциональный перевод загруженных файлов",
     description="""
 # Загрузка документов
