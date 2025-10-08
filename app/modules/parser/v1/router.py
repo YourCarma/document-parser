@@ -4,14 +4,14 @@ import tempfile
 import os
 import aiofiles
 
-from fastapi import (APIRouter, Depends, HTTPException)
+from fastapi import APIRouter, Depends, Request
 from loguru import logger
 
 from settings import settings
-from .exceptions import (BadRequestError, ContentNotSupportedError)
+from .exceptions import BadRequestError, ContentNotSupportedError
 from modules.parser.v1.schemas import ParserRequest, ParserResponse, FileFormats, ParserParams
 from modules.parser.v1.abc.factory import ParserFactory
-from modules.parser.v1.utils import save_file, delete_file
+from modules.parser.v1.utils import save_file, delete_file, run_in_process
 
 router = APIRouter(prefix="/v1/parser")
 
@@ -33,6 +33,7 @@ router = APIRouter(prefix="/v1/parser")
  * **IMAGES**: `{FileFormats.IMAGE.value}`
  * **HTML**: `{FileFormats.HTML.value}`
  * **PPTX**: `{FileFormats.PPTX.value}`
+ * **TXT**: `{FileFormats.TXT.value}`
   ### Параметры запроса:
  1. `parse_images`: `bool | None` - Необходимо распознавать текст на изображениях (**требуется** подключение к VLM, может занимать больше времени)
  2. `include_image_in_output`: `bool | None` - Вшивать изображения исходного документа в **OUTPUT** в виде `base64` (Может излишне нагружать markdown)
@@ -43,7 +44,7 @@ router = APIRouter(prefix="/v1/parser")
  ``` 
     """,
              tags=['Parser'])
-async def parse(parser_data: ParserRequest = Depends()) -> ParserResponse:
+async def parse(request_fastapi: Request, parser_data: ParserRequest = Depends()) -> ParserResponse:
     try:
         file = parser_data.file
         file_path = await save_file(file)
@@ -52,7 +53,7 @@ async def parse(parser_data: ParserRequest = Depends()) -> ParserResponse:
             parse_images=parser_data.parse_images,
             include_image_in_output=parser_data.include_image_in_output)
         parser = ParserFactory(parser_params).get_parser()
-        text = parser.parse()
+        text = await run_in_process(fn=parser.parse, app_executor=request_fastapi.app.state.executor)
         instance = ParserResponse(parsed_text=text)
         return instance
     except Exception as e:

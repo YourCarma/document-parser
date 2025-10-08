@@ -44,3 +44,7 @@ def read_file_content(file_path: Path):
             return contents
     except Exception as e:
         logger.error(f"Error on deleting \"{file_path}\" file: {e}")
+
+async def run_in_process(fn, app_executor, *args):
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(app_executor, fn, *args)

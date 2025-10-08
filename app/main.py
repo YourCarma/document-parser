@@ -1,14 +1,27 @@
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from concurrent.futures.process import ProcessPoolExecutor
+from contextlib import asynccontextmanager
+from loguru import logger
+
 from settings import settings
 from api.routers import routers
 
-app = FastAPI(title="Document Parser",
-              description="""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.warning("Starting service...")
+    app.state.executor = ProcessPoolExecutor(max_workers=2)
+    yield
+    logger.warning("Closing service...")
+    app.state.executor.shutdown()
 
-""",
+app = FastAPI(title="Document Parser",
+              lifespan=lifespan,
+              description=""" """,
               version="0.3.1-without-wh")
+
+
 
 origins = ["*"]
 
