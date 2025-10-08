@@ -4,13 +4,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from settings import settings
 from api.routers import routers
 
-app=FastAPI(
-    title="Sova-Parser",
-    description="""
+app = FastAPI(title="Document Parser",
+              description="""
 
 """,
-    version="0.0.1"
-)
+              version="0.3.1-without-wh")
 
 origins = ["*"]
 
@@ -25,7 +23,7 @@ app.add_middleware(
 for router in routers:
     app.include_router(router)
 
-if __name__ == "__main__":  
+if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host=settings.HOST,

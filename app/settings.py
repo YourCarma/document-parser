@@ -4,7 +4,10 @@ from dotenv import load_dotenv
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-env_file_path = Path(__file__).parent.parent.joinpath(".env.dev").__str__()
+env_file_path = Path(__file__).parent.parent.joinpath(
+    ".env.document-parser").__str__()
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=env_file_path)
 
@@ -12,20 +15,20 @@ class Settings(BaseSettings):
     HOST: str
     PORT: int
     ML_DIR: str = str(Path(__file__).parent.parent / "ml")
-    
+
     VLM_BASE_URL: str = "localhost:8097"
     VLM_MODEL_NAME: str = "Qwen2.5-VL-7B-Instruct-Q6_K"
     VLM_API_KEY: str = "no-key-required"
-    
+
     OUTPUT_FORMAT: str
-    
+
     TASK_MANAGER_ENDPOINT: str
     S3_CLOUD_ENDPOINT: str
     MINIO_ENDPOINT: str
     TRANSLATOR_ENDPOINT: str
-    
+
     CLOUD_BUCKET_NAME: str
-    
+
     ALLOWED_MIME_TYPES: List[str] = [
         "image/jpeg",
         "image/webp",
@@ -38,7 +41,9 @@ class Settings(BaseSettings):
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "application/vnd.oasis.opendocument.text",
         "application/pdf",
+        'application/octet-stream',
     ]
+
 
 load_dotenv(env_file_path, override=True)
 settings = Settings()

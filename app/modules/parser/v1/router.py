@@ -1,31 +1,25 @@
-from datetime import timezone,datetime
-from typing import List,Dict
+from datetime import timezone, datetime
+from typing import List, Dict
 import tempfile
 import os
 import aiofiles
 
-from fastapi import (
-    APIRouter, Depends, HTTPException
-)
+from fastapi import (APIRouter, Depends, HTTPException)
 from loguru import logger
 
-
 from settings import settings
-from .exceptions import (
-    BadRequestError,
-    ContentNotSupportedError
-)
+from .exceptions import (BadRequestError, ContentNotSupportedError)
 from modules.parser.v1.schemas import ParserRequest, ParserResponse, FileFormats, ParserParams
 from modules.parser.v1.abc.factory import ParserFactory
 from modules.parser.v1.utils import save_file, delete_file
 
 router = APIRouter(prefix="/v1/parser")
 
-@router.post(
-    path="/parse",
-    name="File parsing",
-    summary="Парсинг файлов",
-    description=f"""   
+
+@router.post(path="/parse",
+             name="File parsing",
+             summary="Парсинг файлов",
+             description=f"""   
     ## Парсинг файлов
   ### Поддерживаемые MIME-типы:
   ```python 
@@ -48,16 +42,15 @@ router = APIRouter(prefix="/v1/parser")
  {ParserResponse.model_fields}
  ``` 
     """,
-    tags=['Parser']
-)
-async def parse(
-        parser_data: ParserRequest = Depends()) -> ParserResponse:    
-    try: 
+             tags=['Parser'])
+async def parse(parser_data: ParserRequest = Depends()) -> ParserResponse:
+    try:
         file = parser_data.file
         file_path = await save_file(file)
-        parser_params = ParserParams(file_path=file_path,
-                                     parse_images=parser_data.parse_images,
-                                     include_image_in_output=parser_data.include_image_in_output)
+        parser_params = ParserParams(
+            file_path=file_path,
+            parse_images=parser_data.parse_images,
+            include_image_in_output=parser_data.include_image_in_output)
         parser = ParserFactory(parser_params).get_parser()
         text = parser.parse()
         instance = ParserResponse(parsed_text=text)

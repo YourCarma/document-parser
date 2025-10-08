@@ -12,8 +12,8 @@ from modules.parser.v1.exceptions import ContentNotSupportedError
 
 class ParserRequest(BaseModel):
     file: UploadFile = File(description="Файл для парсинга")
-    parse_images: Optional[bool]  = Field(description="Необходимо распознавать вложенные изображения (Необходимо наличие VLM)", default=True)
-    include_image_in_output: Optional[bool] = Field(description="Вшивать изображения в текст вида `base64`", default=True)
+    parse_images: Optional[bool]  = Field(description="Необходимо распознавать вложенные изображения (Необходимо наличие VLM)", default=False)
+    include_image_in_output: Optional[bool] = Field(description="Вшивать изображения в текст вида `base64`", default=False)
     
     @field_validator("file", mode="after")  
     @classmethod
