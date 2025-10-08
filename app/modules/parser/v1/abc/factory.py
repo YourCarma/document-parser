@@ -4,7 +4,7 @@ from loguru import logger
 
 from modules.parser.v1.schemas import FileFormats, ParserParams
 from modules.parser.v1.exceptions import ContentNotSupportedError, ServiceUnavailable, TimeoutError
-from modules.parser.v1.file_parsers import ImageParser, PPTXParser, DocParser, XLSXParser,PDFParser, HTMLParser
+from modules.parser.v1.file_parsers import ImageParser, PPTXParser, DocParser, XLSXParser,PDFParser, HTMLParser, TXTParser
 
 class ParserFactory():
     def __init__(self, parser_params: ParserParams):
@@ -16,6 +16,7 @@ class ParserFactory():
         self.PDF_FORMATS = FileFormats.PDF.value
         self.PPTX_FORMATS = FileFormats.PPTX.value
         self.HTML_FORMATS = FileFormats.HTML.value
+        self.TXT_FORMATS = FileFormats.TXT.value
 
     def get_parser(self):
         if not isinstance(self.parser_params.file_path, Path):
@@ -47,6 +48,10 @@ class ParserFactory():
             case file_format if file_format in self.HTML_FORMATS:
                 logger.debug("HTML Parser Created!")
                 return HTMLParser(self.parser_params)
+            
+            case file_format if file_format in self.TXT_FORMATS:
+                logger.debug("TXT Parser Created!")
+                return TXTParser(self.parser_params)
             
             case _:
                 raise ContentNotSupportedError(f"Формат \"{source_file_format}\" не поддерживается!")

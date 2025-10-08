@@ -41,7 +41,8 @@ class FileFormats(enum.Enum):
     PPTX = [".pptx"]
     XLSX = [".xlsx"]
     HTML = [".html"]
-
+    TXT = [".txt"]
+    
 class ParserParams(BaseModel):
     file_path: Union[str, Path] = Field(description="Путь к файлу")
     parse_images: Optional[bool]  = Field(description="Необходимо распознавать вложенные изображения (Необходимо наличие VLM)", default=True)

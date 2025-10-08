@@ -36,3 +36,11 @@ async def delete_file(file_path: Path):
         logger.success(f"File \"{file_path}\" succesfully deleted!")
     except Exception as e:
         logger.error(f"Error on deleting \"{file_path}\" file: {e}")
+
+def read_file_content(file_path: Path):
+    try:
+        with open(file_path, mode='r', encoding='utf-8') as file:
+            contents = file.read()
+            return contents
+    except Exception as e:
+        logger.error(f"Error on deleting \"{file_path}\" file: {e}")
