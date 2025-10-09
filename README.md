@@ -9,14 +9,14 @@ Figure 1. Context schema of service
 
 ### Allowed formats
 
-| **Images** | **Documents** | **Presentation** | **XLSX** | **PDF** |
-|:----------:|:-------------:|:----------------:|:--------:|:-------:|
-|    .png    |     .docx     |       .pptx      |   .xlsx  |   .pdf  |
-|    .jpeg   |               |                  |          |         |
-|    .jpg    |               |                  |          |         |
-|    .bmp    |               |                 	|          |         |
-|    .tiff   |               |                  |          |         |
-|    .webp   |               |                  |          |         |
+| **Images** | **Documents** | **Presentation** | **XLSX** | **PDF** | **TXT** |
+|:----------:|:-------------:|:----------------:|:--------:|:-------:|:-------:|
+|    .png    |     .docx     |       .pptx      |   .xlsx  |   .pdf  | .txt    |
+|    .jpeg   |               |                  |          |         |         |
+|    .jpg    |               |                  |          |         |         |
+|    .bmp    |               |                 	|          |         |         |
+|    .tiff   |               |                  |          |         |         |
+|    .webp   |               |                  |          |         |         |
 
 
 ## 2. Installing and launching
