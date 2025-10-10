@@ -5,6 +5,7 @@
 Service is designed for parsing documents to single `Markdown` format, using VLM and [Docling framework](https://docling-project.github.io/docling/)
 
 ![Context](./docs/Context.drawio.png)
+
 Figure 1. Context schema of service
 
 ### Allowed formats
@@ -17,7 +18,6 @@ Figure 1. Context schema of service
 |    .bmp    |               |                 	|          |         |         |
 |    .tiff   |               |                  |          |         |         |
 |    .webp   |               |                  |          |         |         |
-
 
 ## 2. Installing and launching
 
@@ -58,7 +58,9 @@ Parser factory consists of **5** parser types, which having own processing algor
  * `PPTXParser`
  * `XLSXParser`
  * `PDFParser`
+
 ![Parser overview](/docs/parser_logic.drawio.png)
+
 Figure 2. Parser class overview
 
 ### API
