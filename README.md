@@ -1,5 +1,7 @@
 # Document Parser
 
+> FastAPI + Docling + VLM (Optional) app
+
 ## 1. Overview
 
 Service is designed for parsing documents to single `Markdown` format, using VLM and [Docling framework](https://docling-project.github.io/docling/)
