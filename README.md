@@ -28,6 +28,9 @@ Figure 1. Context schema of service
  3. ❗❗❗ Access to `VLM` for Image parsing (**external** or **self-hosted** `VLM`).
  4. `Poetry`
 
+❗❗❗ Download Docling models in root dir `ml` using:
+`docling-tools models download --all -o ml`
+
 ### Environments
 
  * `SERVICE_NAME`- the name of service, e.g. `document-parser`
