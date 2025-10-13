@@ -37,6 +37,9 @@ Figure 1. Context schema of service
  * `VLM_MODEL_NAME` - VLM model name, e.g. `Qwen2.5-VL`,
  * `VLM_API_KEY` - API-KEY auth for model, e.g. `no-key-required`
 
+❗❗❗ Download Docling models in root dir `ml` using:
+`docling-tools models download --all -o ml`
+
 ### Manual startup
 
  1. `poetry shell`
