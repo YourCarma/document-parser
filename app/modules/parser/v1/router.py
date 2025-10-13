@@ -38,6 +38,7 @@ router = APIRouter(prefix="/v1/parser")
  1. `parse_images`: `bool | None` - Необходимо распознавать текст на изображениях (**требуется** подключение к VLM, может занимать больше времени)
  2. `include_image_in_output`: `bool | None` - Вшивать изображения исходного документа в **OUTPUT** в виде `base64` (Может излишне нагружать markdown)
 
+ 
   ### Возвращаемый объект:
  ```python
  {ParserResponse.model_fields}
