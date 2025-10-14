@@ -14,20 +14,29 @@ async def save_file(file: UploadFile) -> Path:
     try:
         temp_dir = tempfile.gettempdir()
         original_filename = file.filename
-
+        
+        file_stem = Path(original_filename).stem
+        file_suffix = Path(original_filename).suffix
+        
         temp_path = os.path.join(temp_dir, original_filename)
-
+        
+        counter = 1
+        while os.path.exists(temp_path):
+            new_filename = f"{file_stem}_{counter}{file_suffix}"
+            temp_path = os.path.join(temp_dir, new_filename)
+            counter += 1
+        
         content = await file.read()
-
+        
         async with aiofiles.open(temp_path, 'wb') as f:
             await f.write(content)
 
         logger.success(f"File saved at: {temp_path}")
-        return temp_path
+        return Path(temp_path)
     except Exception as e:
         logger.error(f"Error saving_file: {e}")
         await delete_file(temp_path)
-
+        raise
 
 async def delete_file(file_path: Path):
     try:

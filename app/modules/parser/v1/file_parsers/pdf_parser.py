@@ -5,6 +5,8 @@ from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.datamodel.base_models import  InputFormat
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
+from docling.backend.docling_parse_v2_backend import DoclingParseV2DocumentBackend
+from docling.backend.docling_parse_v4_backend import DoclingParseV4DocumentBackend
 from loguru import logger
 from docling_core.types.doc import (
     ImageRef, PictureItem, TableItem, ImageRefMode, TextItem, DocItemLabel, TableData
@@ -29,7 +31,7 @@ class PDFParser(ParserABC):
 
     def set_converter_options(self):
         self.converter = DocumentConverter(format_options={
-                InputFormat.PDF: PdfFormatOption(pipeline_options=self.pipeline_options, backend=PyPdfiumDocumentBackend)
+                InputFormat.PDF: PdfFormatOption(pipeline_options=self.pipeline_options, backend=DoclingParseV4DocumentBackend)
                 })
         
     def parse(self):
@@ -48,6 +50,6 @@ class PDFParser(ParserABC):
                     doc.insert_text(element, text=parsed_text, orig=parsed_text, label=DocItemLabel.TEXT)
 
         markdown = doc.export_to_markdown(image_mode=self.image_mode)
-        doc.save_as_markdown('test.md', image_mode=ImageRefMode.EMBEDDED)
+        clean_text = self.clean_markdown_text(markdown)
         logger.success("Document have been parsed!")
-        return markdown
+        return clean_text

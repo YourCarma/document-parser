@@ -1,6 +1,9 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 from PIL.Image import Image
+import re
+
+import chardet
 
 from modules.parser.v1.schemas import ParserParams
 from docling.document_converter import DocumentConverter
@@ -34,6 +37,10 @@ class ParserABC(ABC):
             logger.error(f"Error converting document with Docling: {e}")
             raise e
         
+    
+    def clean_markdown_text(self, text: str):
+        return text
+
     @abstractmethod
     def parse(self):
         pass
