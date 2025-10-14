@@ -1,10 +1,13 @@
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from docling.document_converter import DocumentConverter
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.datamodel.base_models import  InputFormat
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
+from docling.backend.docling_parse_v2_backend import DoclingParseV2DocumentBackend
+from docling.backend.docling_parse_v4_backend import DoclingParseV4DocumentBackend
 from loguru import logger
 from docling_core.types.doc import (
     ImageRef, PictureItem, TableItem, ImageRefMode, TextItem, DocItemLabel, TableData
@@ -12,7 +15,7 @@ from docling_core.types.doc import (
 
 from modules.parser.v1.file_parsers.image_parser import ImageParser
 from modules.parser.v1.abc.abc import ParserABC
-from modules.parser.v1.schemas import ParserParams
+from modules.parser.v1.schemas import ParserParams, ParserMods
 
 
 class PDFParser(ParserABC):
@@ -29,14 +32,22 @@ class PDFParser(ParserABC):
 
     def set_converter_options(self):
         self.converter = DocumentConverter(format_options={
-                InputFormat.PDF: PdfFormatOption(pipeline_options=self.pipeline_options, backend=PyPdfiumDocumentBackend)
+                InputFormat.PDF: PdfFormatOption(pipeline_options=self.pipeline_options, backend=DoclingParseV4DocumentBackend)
                 })
         
-    def parse(self):
+    def parse(self, mode: ParserMods):
         logger.debug(f"Parsing {self.source_file}...")
         self.set_converter_options()
         doc = self.converter.convert(self.source_file).document
         logger.success(f"Document converted!")
+        for element, _level in doc.iterate_items():
+            if isinstance(element, TextItem):
+                element.orig = element.text
+                element.text = self.clean_text(text=element.text)
+
+            elif isinstance(element, TableItem):
+                for cell in element.data.table_cells:
+                    cell.text = self.clean_text(text=cell.text)
         logger.debug(f"Exctracting text from images...")
         if self.parser_params.parse_images:
             for element, _level in doc.iterate_items():
@@ -48,6 +59,14 @@ class PDFParser(ParserABC):
                     doc.insert_text(element, text=parsed_text, orig=parsed_text, label=DocItemLabel.TEXT)
 
         markdown = doc.export_to_markdown(image_mode=self.image_mode)
-        doc.save_as_markdown('test.md', image_mode=ImageRefMode.EMBEDDED)
         logger.success("Document have been parsed!")
-        return markdown
+        if mode == ParserMods.TO_FILE.value:
+            logger.debug("Saving to .md file")
+            with NamedTemporaryFile(suffix=".md", delete=False) as tmp_file:
+                doc.save_as_markdown(filename=tmp_file.name,artifacts_dir=self.artifacts_path, image_mode=self.image_mode)
+                logger.success("File Saved!")
+                return tmp_file.name
+        else: 
+            return clean_text
+
+        

@@ -1,4 +1,5 @@
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from docling.document_converter import DocumentConverter, HTMLFormatOption
 from docling.datamodel.pipeline_options import PipelineOptions, PdfPipelineOptions
@@ -9,7 +10,7 @@ from docling_core.types.doc import (
     ImageRef, PictureItem, TableItem, ImageRefMode, TextItem, DocItemLabel, TableData
 )
 
-from modules.parser.v1.schemas import ParserParams
+from modules.parser.v1.schemas import ParserParams, ParserMods
 from modules.parser.v1.file_parsers.image_parser import ImageParser
 from modules.parser.v1.abc.abc import ParserABC
 
@@ -27,11 +28,19 @@ class HTMLParser(ParserABC):
                 InputFormat.XLSX: HTMLFormatOption(pipeline_options=self.pipeline_options)
                 })
         
-    def parse(self):
+    def parse(self, mode: ParserMods):
         logger.debug(f"Parsing {self.parser_params.file_path}...")
         self.set_converter_options()
         doc = self.converter.convert(self.parser_params.file_path).document
         logger.success(f"Document converted!")
+        for element, _level in doc.iterate_items():
+            if isinstance(element, TextItem):
+                element.orig = element.text
+                element.text = self.clean_text(text=element.text)
+
+            elif isinstance(element, TableItem):
+                for cell in element.data.table_cells:
+                    cell.text = self.clean_text(text=cell.text)
         logger.debug(f"Exctracting text from images...")
         if self.parser_params.parse_images:
             for element, _level in doc.iterate_items():

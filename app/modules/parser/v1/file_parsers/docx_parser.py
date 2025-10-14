@@ -1,4 +1,5 @@
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from docling.document_converter import DocumentConverter
 from docling.datamodel.pipeline_options import PipelineOptions, PaginatedPipelineOptions
@@ -9,7 +10,7 @@ from docling_core.types.doc import (
     ImageRef, PictureItem, TableItem, ImageRefMode, TextItem, DocItemLabel, TableData
 )
 
-from modules.parser.v1.schemas import ParserParams
+from modules.parser.v1.schemas import ParserParams, ParserMods
 from modules.parser.v1.file_parsers.image_parser import ImageParser
 from modules.parser.v1.abc.abc import ParserABC
 
@@ -25,11 +26,19 @@ class DocParser(ParserABC):
                 InputFormat.DOCX: WordFormatOption(pipeline_options=self.pipeline_options)
                 })
         
-    def parse(self):
+    def parse(self, mode: ParserMods):
         logger.debug(f"Parsing {self.parser_params.file_path}...")
         self.set_converter_options()
         doc = self.converter.convert(self.parser_params.file_path).document
         logger.success(f"Document converted!")
+        for element, _level in doc.iterate_items():
+            if isinstance(element, TextItem):
+                element.orig = element.text
+                element.text = self.clean_text(text=element.text)
+
+            elif isinstance(element, TableItem):
+                for cell in element.data.table_cells:
+                    cell.text = self.clean_text(text=cell.text)
         logger.debug(f"Exctracting text from images...")
         if self.parser_params.parse_images:
             for element, _level in doc.iterate_items():
@@ -41,7 +50,12 @@ class DocParser(ParserABC):
                     doc.insert_text(element, text=parsed_text, orig=parsed_text, label=DocItemLabel.TEXT)
         
         markdown = doc.export_to_markdown(image_mode=self.image_mode)
-        
-        doc.save_as_markdown('test.md')
         logger.success("Document have been parsed!")
-        return markdown
+        if mode == ParserMods.TO_FILE.value:
+            logger.debug("Saving to .md file")
+            with NamedTemporaryFile(suffix=".md", delete=False) as tmp_file:
+                doc.save_as_markdown(filename=tmp_file.name,artifacts_dir=self.artifacts_path, image_mode=self.image_mode)
+                logger.success("File Saved!")
+                return tmp_file.name
+        else: 
+            return markdown

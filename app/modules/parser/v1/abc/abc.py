@@ -1,8 +1,11 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 from PIL.Image import Image
+import re
 
-from modules.parser.v1.schemas import ParserParams
+import chardet
+
+from modules.parser.v1.schemas import ParserParams, ParserMods
 from docling.document_converter import DocumentConverter
 from loguru import logger
 from docling_core.types.doc import (
@@ -34,6 +37,45 @@ class ParserABC(ABC):
             logger.error(f"Error converting document with Docling: {e}")
             raise e
         
+    
+    def clean_text(self, text: str):
+            
+        def replace_uni(match):
+            try:
+                return chr(int(match.group(1), 16))
+            except ValueError:
+                return match.group(0)
+        
+        text = re.sub(r'/uni([0-9A-Fa-f]{4})', replace_uni, text)
+        invisible_spaces = [
+            '\u00A0',  # неразрывный пробел
+            '\u1680',  # Ogham space mark
+            '\u2000',  # en quad
+            '\u2001',  # em quad
+            '\u2002',  # en space
+            '\u2003',  # em space
+            '\u2004',  # three-per-em space
+            '\u2005',  # four-per-em space
+            '\u2006',  # six-per-em space
+            '\u2007',  # figure space
+            '\u2008',  # punctuation space
+            '\u2009',  # thin space
+            '\u200A',  # hair space
+            '\u202F',  # narrow no-break space
+            '\u205F',  # medium mathematical space
+            '\u3000',  # IDEOGRAPHIC SPACE
+            '\u00AD',  # мягкий перенос (часто мешает)
+            '\u2060',  # word joiner
+            '\uFEFF',  # BOM / zero width no-break space
+            '\u200B',  # zero width space
+            '\u200C',  # zero width non-joiner
+            '\u200D',  # zero width joiner
+        ]
+        
+        for sp in invisible_spaces:
+            text = text.replace(sp, ' ')
+        return text
+
     @abstractmethod
-    def parse(self):
+    def parse(self, mode: ParserMods = ParserMods.TO_TEXT.value):
         pass

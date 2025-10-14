@@ -1,6 +1,7 @@
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from concurrent.futures.process import ProcessPoolExecutor
 from contextlib import asynccontextmanager
 from loguru import logger
@@ -35,6 +36,17 @@ app.add_middleware(
 
 for router in routers:
     app.include_router(router)
+@app.get('/', tags=['System'], response_class=HTMLResponse)
+async def get_root():
+    return """
+        <a href="/docs">ДОКУМЕНТАЦИЯ</a>
+    """
+
+@app.get('/health', tags=['System'])
+async def health_check():
+    return {
+        'status': "Ok",
+    }
 
 if __name__ == "__main__":
     uvicorn.run(
