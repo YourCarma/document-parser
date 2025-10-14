@@ -1,4 +1,5 @@
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from docling.document_converter import DocumentConverter
 from docling.datamodel.pipeline_options import PdfPipelineOptions
@@ -14,7 +15,7 @@ from docling_core.types.doc import (
 
 from modules.parser.v1.file_parsers.image_parser import ImageParser
 from modules.parser.v1.abc.abc import ParserABC
-from modules.parser.v1.schemas import ParserParams
+from modules.parser.v1.schemas import ParserParams, ParserMods
 
 
 class PDFParser(ParserABC):
@@ -34,7 +35,7 @@ class PDFParser(ParserABC):
                 InputFormat.PDF: PdfFormatOption(pipeline_options=self.pipeline_options, backend=DoclingParseV4DocumentBackend)
                 })
         
-    def parse(self):
+    def parse(self, mode: ParserMods):
         logger.debug(f"Parsing {self.source_file}...")
         self.set_converter_options()
         doc = self.converter.convert(self.source_file).document
@@ -52,4 +53,13 @@ class PDFParser(ParserABC):
         markdown = doc.export_to_markdown(image_mode=self.image_mode)
         clean_text = self.clean_markdown_text(markdown)
         logger.success("Document have been parsed!")
-        return clean_text
+        if mode == ParserMods.TO_FILE.value:
+            logger.debug("Saving to .md file")
+            with NamedTemporaryFile(suffix=".md", delete=False) as tmp_file:
+                doc.save_as_markdown(filename=tmp_file.name,artifacts_dir=self.artifacts_path, image_mode=self.image_mode)
+                logger.success("File Saved!")
+                return tmp_file.name
+        else: 
+            return clean_text
+
+        

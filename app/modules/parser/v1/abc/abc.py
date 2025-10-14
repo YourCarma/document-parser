@@ -5,7 +5,7 @@ import re
 
 import chardet
 
-from modules.parser.v1.schemas import ParserParams
+from modules.parser.v1.schemas import ParserParams, ParserMods
 from docling.document_converter import DocumentConverter
 from loguru import logger
 from docling_core.types.doc import (
@@ -42,5 +42,5 @@ class ParserABC(ABC):
         return text
 
     @abstractmethod
-    def parse(self):
+    def parse(self, mode: ParserMods = ParserMods.TO_TEXT.value):
         pass

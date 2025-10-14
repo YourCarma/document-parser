@@ -26,7 +26,7 @@ class ParserRequest(BaseModel):
         logger.success("File MIME type supported!")
         return file
     
-class ParserResponse(BaseModel):
+class ParserTextResponse(BaseModel):
     parsed_text: str = Field(description="Распознанный текст в формате markdown", examples=["## Heading"])
 
 class DocLingAPIVLMOptionsParams(BaseModel):
@@ -34,7 +34,7 @@ class DocLingAPIVLMOptionsParams(BaseModel):
     max_tokens: Optional[int] = Field(default=4096)
     skip_special_tokens: Optional[bool] = Field(default=False)
 
-class FileFormats(enum.Enum):
+class FileFormats(list[str], enum.Enum):
     IMAGE = [".jpg", ".jpeg", ".png", ".tiff", ".bmp", ".webp"]
     PDF = [".pdf"]
     DOC = [".docx"]
@@ -42,6 +42,10 @@ class FileFormats(enum.Enum):
     XLSX = [".xlsx"]
     HTML = [".html"]
     TXT = [".txt"]
+
+class ParserMods(str, enum.Enum):
+    TO_TEXT = "to_text"
+    TO_FILE = "to_file"
     
 class ParserParams(BaseModel):
     file_path: Union[str, Path] = Field(description="Путь к файлу")

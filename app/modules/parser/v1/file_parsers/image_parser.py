@@ -4,6 +4,7 @@ from PIL import Image
 from io import BytesIO
 import requests
 from uuid import uuid4
+from tempfile import NamedTemporaryFile
 
 from docling.pipeline.vlm_pipeline import VlmPipeline
 from docling.document_converter import DocumentConverter
@@ -16,7 +17,7 @@ from loguru import logger
 
 from modules.parser.v1.abc.abc import ParserABC
 from settings import settings
-from modules.parser.v1.schemas import DocLingAPIVLMOptionsParams
+from modules.parser.v1.schemas import DocLingAPIVLMOptionsParams, ParserMods
 from modules.parser.v1.exceptions import ServiceUnavailable, TimeoutError
 
 
@@ -139,14 +140,23 @@ class ImageParser(ParserABC):
                             }
                         )
         
-    def parse(self):
+    def parse(self, mode: ParserMods):
         logger.debug("Parsing Image...")
         self._set_converter_options()
         try:
             self.source_file = self.convert_image_to_bytes_io(self.source_file)
             doc = self.converter.convert(self.source_file).document
-            markdown = doc.export_to_markdown()
-            return markdown
+            markdown = doc.export_to_markdown(image_mode=self.image_mode)
+            clean_text = self.clean_markdown_text(markdown)
+            logger.success("Document have been parsed!")
+            if mode == ParserMods.TO_FILE.value:
+                logger.debug("Saving to .md file")
+                with NamedTemporaryFile(suffix=".md", delete=False) as tmp_file:
+                    doc.save_as_markdown(filename=tmp_file.name,artifacts_dir=self.artifacts_path, image_mode=self.image_mode)
+                    logger.success("File Saved!")
+                    return tmp_file.name
+            else: 
+                return clean_text
         except requests.exceptions.ConnectionError as e:
             logger.error(f"VLM is not available: {e}")
             raise ServiceUnavailable("VLM", settings.VLM_BASE_URL)

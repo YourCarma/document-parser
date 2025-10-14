@@ -1,10 +1,11 @@
 import asyncio
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from loguru import logger
 
 from modules.parser.v1.abc.abc import ParserABC
-from modules.parser.v1.schemas import ParserParams
+from modules.parser.v1.schemas import ParserParams, ParserMods
 from modules.parser.v1.utils import read_file_content
 
 
@@ -13,7 +14,7 @@ class TXTParser(ParserABC):
         super().__init__(parser_params)
 
     
-    def parse(self):
+    def parse(self, mode: ParserMods):
         logger.debug(f"Parsing {self.source_file}...")
         file_content = read_file_content(self.parser_params.file_path)
         return file_content
