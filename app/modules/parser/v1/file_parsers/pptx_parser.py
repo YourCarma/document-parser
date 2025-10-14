@@ -34,6 +34,16 @@ class PPTXParser(ParserABC):
         doc = self.converter.convert(self.source_file).document
         logger.success(f"Document converted!")
         logger.debug(f"Exctracting text from images...")
+        logger.debug("Cleaning text")
+        for element, _level in doc.iterate_items():
+            if isinstance(element, TextItem):
+                element.orig = element.text
+                element.text = self.clean_text(text=element.text)
+
+            elif isinstance(element, TableItem):
+                for cell in element.data.table_cells:
+                    cell.text = self.clean_text(text=cell.text)
+
         if self.parser_params.parse_images:
             for element, _level in doc.iterate_items():
                 if isinstance(element, PictureItem) or isinstance(element, TableItem):
@@ -44,13 +54,14 @@ class PPTXParser(ParserABC):
                     doc.insert_text(element, text=parsed_text, orig=parsed_text, label=DocItemLabel.TEXT)
 
         markdown = doc.export_to_markdown(image_mode=self.image_mode)
-        clean_text = self.clean_markdown_text(markdown)
         logger.success("Document have been parsed!")
         if mode == ParserMods.TO_FILE.value:
             logger.debug("Saving to .md file")
             with NamedTemporaryFile(suffix=".md", delete=False) as tmp_file:
+                
                 doc.save_as_markdown(filename=tmp_file.name,artifacts_dir=self.artifacts_path, image_mode=self.image_mode)
+                
                 logger.success("File Saved!")
                 return tmp_file.name
         else: 
-            return clean_text
+            return markdown

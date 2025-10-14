@@ -34,6 +34,14 @@ class XLSXParser(ParserABC):
         self.set_converter_options()
         doc = self.converter.convert(self.source_file).document
         logger.success(f"Document converted!")
+        for element, _level in doc.iterate_items():
+            if isinstance(element, TextItem):
+                element.orig = element.text
+                element.text = self.clean_text(text=element.text)
+
+            elif isinstance(element, TableItem):
+                for cell in element.data.table_cells:
+                    cell.text = self.clean_text(text=cell.text)
         logger.debug(f"Exctracting text from images...")
         if self.parser_params.parse_images:
             for element, _level in doc.iterate_items():
@@ -45,7 +53,6 @@ class XLSXParser(ParserABC):
                     doc.insert_text(element, text=parsed_text, orig=parsed_text, label=DocItemLabel.TEXT)
 
         markdown = doc.export_to_markdown(image_mode=self.image_mode)
-        clean_text = self.clean_markdown_text(markdown)
         logger.success("Document have been parsed!")
         if mode == ParserMods.TO_FILE.value:
             logger.debug("Saving to .md file")
@@ -54,4 +61,4 @@ class XLSXParser(ParserABC):
                 logger.success("File Saved!")
                 return tmp_file.name
         else: 
-            return clean_text
+            return markdown

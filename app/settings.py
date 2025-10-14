@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 env_file_path = Path(__file__).parent.parent.joinpath(
-    ".env.dev").__str__()
+    ".env.document-parser").__str__()
 
 
 class Settings(BaseSettings):

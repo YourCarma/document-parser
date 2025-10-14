@@ -147,7 +147,6 @@ class ImageParser(ParserABC):
             self.source_file = self.convert_image_to_bytes_io(self.source_file)
             doc = self.converter.convert(self.source_file).document
             markdown = doc.export_to_markdown(image_mode=self.image_mode)
-            clean_text = self.clean_markdown_text(markdown)
             logger.success("Document have been parsed!")
             if mode == ParserMods.TO_FILE.value:
                 logger.debug("Saving to .md file")
@@ -156,7 +155,7 @@ class ImageParser(ParserABC):
                     logger.success("File Saved!")
                     return tmp_file.name
             else: 
-                return clean_text
+                return markdown
         except requests.exceptions.ConnectionError as e:
             logger.error(f"VLM is not available: {e}")
             raise ServiceUnavailable("VLM", settings.VLM_BASE_URL)
