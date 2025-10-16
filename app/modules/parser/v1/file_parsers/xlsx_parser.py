@@ -52,13 +52,16 @@ class XLSXParser(ParserABC):
                     parsed_text = parser.parse_image_for_element(image)
                     doc.insert_text(element, text=parsed_text, orig=parsed_text, label=DocItemLabel.TEXT)
 
-        markdown = doc.export_to_markdown(image_mode=self.image_mode)
-        logger.success("Document have been parsed!")
-        if mode == ParserMods.TO_FILE.value:
-            logger.debug("Saving to .md file")
-            with NamedTemporaryFile(suffix=".md", delete=False) as tmp_file:
-                doc.save_as_markdown(filename=tmp_file.name,artifacts_dir=self.artifacts_path, image_mode=self.image_mode)
-                logger.success("File Saved!")
-                return tmp_file.name
-        else: 
-            return markdown
+        match mode:
+            case ParserMods.TO_FILE:
+                logger.debug("Saving to .md file")
+                with NamedTemporaryFile(suffix=".md", delete=False) as tmp_file:
+                    doc.save_as_markdown(filename=tmp_file.name,artifacts_dir=self.artifacts_path, image_mode=self.image_mode)
+                    logger.success("File Saved!")
+                    return tmp_file.name
+            case ParserMods.TO_TEXT:
+                markdown = doc.export_to_markdown(image_mode=self.image_mode)
+                return markdown
+            case _:
+                logger.error("Unknown parse mode!")
+                raise ValueError
