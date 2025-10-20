@@ -35,6 +35,4 @@ class Settings(BaseSettings):
         'application/octet-stream',
     ]
 
-
-load_dotenv(env_file_path, override=True)
 settings = Settings()
