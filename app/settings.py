@@ -1,15 +1,14 @@
 from typing import List
 from pathlib import Path
 from dotenv import load_dotenv
+import os
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-env_file_path = Path(__file__).parent.parent.joinpath(
-    ".env.dev").__str__()
-
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=env_file_path)
+    model_config = SettingsConfigDict(
+            env_file=os.getenv('ENV_FILE', Path(__file__).parent.parent.joinpath(".env.production").__str__()))
 
     SERVICE_NAME: str
     HOST: str
