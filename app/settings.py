@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-            env_file=os.getenv('ENV_FILE', Path(__file__).parent.parent.joinpath(".env.production").__str__()))
+            env_file=os.getenv('ENV_FILE', Path(__file__).parent.parent.joinpath(".env.dev").__str__()))
 
     SERVICE_NAME: str
     HOST: str
@@ -34,5 +34,4 @@ class Settings(BaseSettings):
         "application/pdf",
         'application/octet-stream',
     ]
-
 settings = Settings()
