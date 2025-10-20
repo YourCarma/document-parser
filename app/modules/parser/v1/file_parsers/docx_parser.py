@@ -35,6 +35,7 @@ class DocParser(ParserABC):
             if isinstance(element, TextItem):
                 element.orig = element.text
                 element.text = self.clean_text(text=element.text)
+                element.text = self.to_utf8(element.text)
 
             elif isinstance(element, TableItem):
                 for cell in element.data.table_cells:

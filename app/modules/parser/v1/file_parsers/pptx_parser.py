@@ -39,11 +39,12 @@ class PPTXParser(ParserABC):
             if isinstance(element, TextItem):
                 element.orig = element.text
                 element.text = self.clean_text(text=element.text)
+                element.text = self.to_utf8(element.text)
 
             elif isinstance(element, TableItem):
                 for cell in element.data.table_cells:
                     cell.text = self.clean_text(text=cell.text)
-
+                    cell.text = self.to_utf8(cell.text)
         if self.parser_params.parse_images:
             for element, _level in doc.iterate_items():
                 if isinstance(element, PictureItem) or isinstance(element, TableItem):

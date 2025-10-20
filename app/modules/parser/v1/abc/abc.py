@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 from PIL.Image import Image
+import chardet
 import re
 
 import chardet
@@ -37,7 +38,27 @@ class ParserABC(ABC):
             logger.error(f"Error converting document with Docling: {e}")
             raise e
         
-    
+    def to_utf8(self, text: str):
+        if isinstance(text, bytes):
+            try:
+                return text.decode('utf-8')
+            except UnicodeDecodeError:
+                encoding = chardet.detect(text)['encoding']
+                try:
+                    return text.decode(encoding or 'utf-8')
+                except:
+                    return text.decode('utf-8', errors='replace')
+        
+  
+        if isinstance(text, str):
+            try:
+                fixed = text.encode('latin-1').decode('cp1251')
+                return fixed
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                return text
+        
+        return str(text)
+
     def clean_text(self, text: str):
             
         def replace_uni(match):

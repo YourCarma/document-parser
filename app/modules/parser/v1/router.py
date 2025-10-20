@@ -44,7 +44,7 @@ router = APIRouter(prefix="/api/v1/parser")
  ``` 
     """,
              tags=['Parser'])
-async def parse_to_file(request_fastapi: Request, parser_data: ParserRequest = Depends()) -> ParserTextResponse:
+async def parse_to_text(request_fastapi: Request, parser_data: ParserRequest = Depends()) -> ParserTextResponse:
     try:
         file = parser_data.file
         file_path = await save_file(file)
@@ -91,7 +91,7 @@ async def parse_to_file(request_fastapi: Request, parser_data: ParserRequest = D
  ``` 
     """,
              tags=['Parser'])
-async def parse_to_file(request_fastapi: Request, parser_data: ParserRequest = Depends()) -> FileResponse:
+async def parse_to_text(request_fastapi: Request, parser_data: ParserRequest = Depends()) -> FileResponse:
     try:
         file = parser_data.file
         file_path = await save_file(file)
