@@ -1,0 +1,22 @@
+document-parser:
+    build: 
+      context: ./
+      dockerfile: Dockerfile
+    restart: on-failure
+    stdin_open: true
+    tty: true
+    ports:
+      - '8012:8012'
+    env_file:
+      - './.env.production'
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0
+    volumes:
+      - './ml:/document-parser/ml'
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: [ '0' ]
+              capabilities: [ gpu ]
