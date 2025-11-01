@@ -5,13 +5,15 @@ import chardet
 import re
 
 import chardet
-
-from modules.parser.v1.schemas import ParserParams, ParserMods
-from docling.document_converter import DocumentConverter
 from loguru import logger
+from docling.document_converter import DocumentConverter
 from docling_core.types.doc import (
     ImageRefMode
 )
+
+from settings import settings
+from modules.parser.v1.schemas import ParserParams, ParserMods
+
 
 
 class ParserABC(ABC):
@@ -22,7 +24,7 @@ class ParserABC(ABC):
         self.parser_params = parser_params
         self.source_file = parser_params.file_path
         self.image_mode = ImageRefMode.EMBEDDED if self.parser_params.include_image_in_output else ImageRefMode.PLACEHOLDER
-        self.artifacts_path=Path(__file__).parent.parent.parent.parent.parent.parent.joinpath("ml")
+        self.artifacts_path=settings.ARTIFACTS_PATH
         self.converter = DocumentConverter()
 
     def parse_with_docling(self, file_path: Path) -> str:
@@ -91,8 +93,10 @@ class ParserABC(ABC):
             '\u200B',  # zero width space
             '\u200C',  # zero width non-joiner
             '\u200D',  # zero width joiner
+            '\u0009'
         ]
         
+        text = text.replace('�', '.')
         for sp in invisible_spaces:
             text = text.replace(sp, ' ')
         return text
