@@ -1,23 +1,33 @@
 FROM bitnamilegacy/pytorch:2.8.0-debian-12-r1 as production
 
 USER root
-ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_FRONTEND noninteractive
 
 WORKDIR /document-parser
 
-COPY ./poetry.lock ./poetry.lock
-COPY ./pyproject.toml ./pyproject.toml
+RUN apt-get update --fix-missing -y && \
+    apt-get install --no-install-recommends --yes \
+    build-essential \
+    ffmpeg \
+    libmagic-dev \
+    libmagic1 \
+    git \
+    poppler-utils \
+    antiword \
+    unrtf \
+    libsm6 \
+    libxext6 \
+    libreoffice -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update --fix-missing -y && apt install ffmpeg -y
-RUN apt-get install --no-install-recommends --yes build-essential -y
-RUN apt-get install libmagic-dev git poppler-utils antiword unrtf libsm6 libxext6 -y
-RUN apt-get install libmagic1 -y
+COPY ./poetry.lock ./pyproject.toml ./
 
-RUN python3 -m pip install poetry 
-RUN poetry config virtualenvs.create false
-RUN poetry config installer.max-workers 3
-RUN poetry install --without dev --no-root
-
+RUN python3 -m pip uninstall opencv-python && \
+    python3 -m pip install poetry && \
+    poetry config virtualenvs.create false && \
+    poetry config installer.max-workers 3 && \
+    poetry install --without dev --no-root
 COPY . .
 
 RUN sed -i 's/\r$//' startup.sh

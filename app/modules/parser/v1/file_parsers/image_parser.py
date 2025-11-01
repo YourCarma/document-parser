@@ -112,7 +112,7 @@ class ImageParser(ParserABC):
         Code Blocks:
         Use triple backticks with language: python, javascript, etc. 
         Accuracy and Handling Uncertainty:
-        Never invent or omit. Mark unclear parts as [?] or [illegible].
+        Never invent or omit. Mark unclear parts as [?] or [undefined].
         Preserve original order and structure meticulously. 
         NO IMAGE DESCRIPTIONS:
         Never describe visual elements (colors, layout, shapes) unless they contain text.
@@ -146,16 +146,20 @@ class ImageParser(ParserABC):
         try:
             self.source_file = self.convert_image_to_bytes_io(self.source_file)
             doc = self.converter.convert(self.source_file).document
-            markdown = doc.export_to_markdown(image_mode=self.image_mode)
             logger.success("Document have been parsed!")
-            if mode == ParserMods.TO_FILE.value:
-                logger.debug("Saving to .md file")
-                with NamedTemporaryFile(suffix=".md", delete=False) as tmp_file:
-                    doc.save_as_markdown(filename=tmp_file.name,artifacts_dir=self.artifacts_path, image_mode=self.image_mode)
-                    logger.success("File Saved!")
-                    return tmp_file.name
-            else: 
-                return markdown
+            match mode:
+                case ParserMods.TO_FILE:
+                    logger.debug("Saving to .md file")
+                    with NamedTemporaryFile(suffix=".md", delete=False) as tmp_file:
+                        doc.save_as_markdown(filename=tmp_file.name,artifacts_dir=self.artifacts_path)
+                        logger.success("File Saved!")
+                        return tmp_file.name
+                case ParserMods.TO_TEXT:
+                    markdown = doc.export_to_markdown()
+                    return markdown
+                case _:
+                    logger.error("Unknown parse mode!")
+                    raise ValueError
         except requests.exceptions.ConnectionError as e:
             logger.error(f"VLM is not available: {e}")
             raise ServiceUnavailable("VLM", settings.VLM_BASE_URL)
@@ -169,7 +173,7 @@ class ImageParser(ParserABC):
             logger.warning(f"Can't append child (Docling Error): {e}")
             return ""
         except AttributeError as e:
-            logger.warning("Image not found...")
+            logger.warning(f"Image not found: {e}")
             return ""
         except Exception as e:
             logger.error(f"Error converting document: {e}")

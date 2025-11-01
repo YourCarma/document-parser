@@ -40,6 +40,7 @@ class PDFParser(ParserABC):
         self.set_converter_options()
         doc = self.converter.convert(self.source_file).document
         logger.success(f"Document converted!")
+        logger.debug("Cleaning documents")
         for element, _level in doc.iterate_items():
             if isinstance(element, TextItem):
                 element.orig = element.text
@@ -70,6 +71,8 @@ class PDFParser(ParserABC):
             case ParserMods.TO_TEXT:
                 markdown = doc.export_to_markdown(image_mode=self.image_mode)
                 return markdown
+            case ParserMods.TO_DOCLING:
+                return doc
             case _:
                 logger.error("Unknown parse mode!")
                 raise ValueError

@@ -1,0 +1,2 @@
+poetry source add paddlepaddle https://www.paddlepaddle.org.cn/packages/stable/cu129/
+poetry add paddlepaddle-gpu==3.2.0 --source paddlepaddle

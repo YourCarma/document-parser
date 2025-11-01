@@ -22,7 +22,7 @@ class ContentNotSupportedError(HTTPException):
             status_code=status.HTTP_406_NOT_ACCEPTABLE, 
             detail=detail,
         )
-
+        
 class ServiceUnavailable(HTTPException):
     def __init__(self, service_name: str, service_url: str):
         logger.error(f"Servie \"{service_name}\" at {service_url} unavaialble! Check the connection!")

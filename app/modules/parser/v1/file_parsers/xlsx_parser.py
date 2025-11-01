@@ -35,6 +35,7 @@ class XLSXParser(ParserABC):
         doc = self.converter.convert(self.source_file).document
         logger.success(f"Document converted!")
         for element, _level in doc.iterate_items():
+            logger.debug("Cleaning text and converting to utf-8")
             if isinstance(element, TextItem):
                 element.orig = element.text
                 element.text = self.clean_text(text=element.text)
@@ -44,6 +45,7 @@ class XLSXParser(ParserABC):
                 for cell in element.data.table_cells:
                     cell.text = self.clean_text(text=cell.text)
                     cell.text = self.to_utf8(cell.text)
+
         logger.debug(f"Exctracting text from images...")
         if self.parser_params.parse_images:
             for element, _level in doc.iterate_items():

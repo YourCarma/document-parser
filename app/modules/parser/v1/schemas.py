@@ -46,6 +46,7 @@ class FileFormats(list[str], enum.Enum):
 class ParserMods(str, enum.Enum):
     TO_TEXT = "to_text"
     TO_FILE = "to_file"
+    TO_DOCLING = "to_docling"
     
 class ParserParams(BaseModel):
     file_path: Union[str, Path] = Field(description="Путь к файлу")
