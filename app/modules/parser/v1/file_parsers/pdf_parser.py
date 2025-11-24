@@ -4,6 +4,7 @@ from tempfile import NamedTemporaryFile
 from docling.document_converter import DocumentConverter
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.datamodel.base_models import  InputFormat
+from docling.pipeline.threaded_standard_pdf_pipeline import ThreadedStandardPdfPipeline
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
 from docling.backend.docling_parse_v2_backend import DoclingParseV2DocumentBackend
@@ -32,7 +33,8 @@ class PDFParser(ParserABC):
 
     def set_converter_options(self):
         self.converter = DocumentConverter(format_options={
-                InputFormat.PDF: PdfFormatOption(pipeline_options=self.pipeline_options, backend=DoclingParseV4DocumentBackend)
+                InputFormat.PDF: PdfFormatOption(pipeline_options=self.pipeline_options,pipeline_cls=ThreadedStandardPdfPipeline, 
+                                                 backend=DoclingParseV4DocumentBackend)
                 })
         
     def parse(self, mode: ParserMods):
