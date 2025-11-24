@@ -607,26 +607,26 @@ wmi = ["wmi (>=1.5.1) ; platform_system == \"Windows\""]
 
 [[package]]
 name = "docling"
-version = "2.58.0"
+version = "2.62.0"
 description = "SDK and CLI for parsing PDF, DOCX, HTML, and more, to a unified document representation for powering downstream workflows such as gen AI applications."
 optional = false
 python-versions = "<4.0,>=3.9"
 groups = ["main"]
 files = [
-    {file = "docling-2.58.0-py3-none-any.whl", hash = "sha256:bc28a4603a249f7a73d39f23345a096f08801fbf430b803e36c6f350e9e0848e"},
-    {file = "docling-2.58.0.tar.gz", hash = "sha256:c1d120d5179807e6fd72947f8709b7c2d716ae024df4b0df44c8abc0bb50476c"},
+    {file = "docling-2.62.0-py3-none-any.whl", hash = "sha256:0f757cc3bd857d9cdfebefda789d725b8fa853dc267f6d45b6ed5c70b24f4d22"},
+    {file = "docling-2.62.0.tar.gz", hash = "sha256:e1ed495ce763fce553fd4b817d025ebf31a5cf0547ded7a0ff4e62f6381eeb96"},
 ]
 
 [package.dependencies]
 accelerate = ">=1.0.0,<2"
 beautifulsoup4 = ">=4.12.3,<5.0.0"
 certifi = ">=2024.7.4"
-docling-core = {version = ">=2.48.2,<3.0.0", extras = ["chunking"]}
+docling-core = {version = ">=2.50.1,<3.0.0", extras = ["chunking"]}
 docling-ibm-models = ">=3.9.1,<4"
 docling-parse = ">=4.7.0,<5.0.0"
 filetype = ">=1.2.0,<2.0.0"
 huggingface_hub = ">=0.23,<1"
-lxml = ">=4.0.0,<6.0.0"
+lxml = ">=4.0.0,<7.0.0"
 marko = ">=2.1.2,<3.0.0"
 ocrmac = {version = ">=1.0.0,<2.0.0", markers = "sys_platform == \"darwin\""}
 openpyxl = ">=3.1.5,<4.0.0"
@@ -648,23 +648,23 @@ tqdm = ">=4.65.0,<5.0.0"
 typer = ">=0.12.5,<0.20.0"
 
 [package.extras]
-asr = ["mlx-whisper (>=0.4.3) ; python_version >= \"3.10\" and sys_platform == \"darwin\" and platform_machine == \"arm64\"", "openai-whisper (>=20250625)"]
+asr = ["mlx-whisper (>=0.4.3) ; python_version >= \"3.10\" and python_version < \"3.14\" and sys_platform == \"darwin\" and platform_machine == \"arm64\"", "openai-whisper (>=20250625) ; python_version < \"3.14\""]
 easyocr = ["easyocr (>=1.7,<2.0)"]
 ocrmac = ["ocrmac (>=1.0.0,<2.0.0) ; sys_platform == \"darwin\""]
-rapidocr = ["onnxruntime (>=1.7.0,<2.0.0)", "rapidocr (>=3.3,<4.0.0) ; python_version < \"3.14\""]
+rapidocr = ["onnxruntime (>=1.7.0,<2.0.0) ; python_version < \"3.14\"", "rapidocr (>=3.3,<4.0.0)"]
 tesserocr = ["tesserocr (>=2.7.1,<3.0.0)"]
-vlm = ["accelerate (>=1.2.1,<2.0.0)", "mlx-vlm (>=0.3.0,<1.0.0) ; python_version >= \"3.10\" and sys_platform == \"darwin\" and platform_machine == \"arm64\"", "qwen-vl-utils (>=0.0.11)", "transformers (>=4.46.0,<5.0.0)", "vllm (>=0.10.0,<1.0.0) ; python_version >= \"3.10\" and sys_platform == \"linux\" and platform_machine == \"x86_64\""]
+vlm = ["accelerate (>=1.2.1,<2.0.0)", "mlx-vlm (>=0.3.0,<1.0.0) ; python_version >= \"3.10\" and python_version < \"3.14\" and sys_platform == \"darwin\" and platform_machine == \"arm64\"", "qwen-vl-utils (>=0.0.11)", "transformers (>=4.46.0,<5.0.0)", "vllm (>=0.10.0,<1.0.0) ; python_version >= \"3.10\" and python_version < \"3.14\" and sys_platform == \"linux\" and platform_machine == \"x86_64\""]
 
 [[package]]
 name = "docling-core"
-version = "2.49.0"
+version = "2.51.1"
 description = "A python library to define and validate data types in Docling."
 optional = false
 python-versions = "<4.0,>=3.9"
 groups = ["main"]
 files = [
-    {file = "docling_core-2.49.0-py3-none-any.whl", hash = "sha256:65605c0546548800dcc3cc4eb6eec24f1a4fa8c9bcd4257722894838588e41ed"},
-    {file = "docling_core-2.49.0.tar.gz", hash = "sha256:7c0f39d58a06192c25aa043141cd8f87ac6a8d2c5eab5137344e1476dd13eacb"},
+    {file = "docling_core-2.51.1-py3-none-any.whl", hash = "sha256:76ca2b4c5c1d33475583671fe584b390e769152cac48d1fb24bf5a7457864a66"},
+    {file = "docling_core-2.51.1.tar.gz", hash = "sha256:f5b0d8ead535c8451f67f9545af007f5bebfda72744a8e90af6e83fb6a483a99"},
 ]
 
 [package.dependencies]
@@ -678,12 +678,18 @@ pyyaml = ">=5.1,<7.0.0"
 semchunk = {version = ">=2.2.0,<3.0.0", optional = true, markers = "extra == \"chunking\""}
 tabulate = ">=0.9.0,<0.10.0"
 transformers = {version = ">=4.34.0,<5.0.0", optional = true, markers = "extra == \"chunking\""}
+tree-sitter = {version = ">=0.23.2,<1.0.0", optional = true, markers = "extra == \"chunking\""}
+tree-sitter-c = {version = ">=0.23.4,<1.0.0", optional = true, markers = "extra == \"chunking\""}
+tree-sitter-java = {version = ">=0.23.5,<1.0.0", optional = true, markers = "extra == \"chunking\""}
+tree-sitter-javascript = {version = ">=0.23.1,<1.0.0", optional = true, markers = "extra == \"chunking\""}
+tree-sitter-python = {version = ">=0.23.6,<1.0.0", optional = true, markers = "extra == \"chunking\""}
+tree-sitter-typescript = {version = ">=0.23.2,<1.0.0", optional = true, markers = "extra == \"chunking\""}
 typer = ">=0.12.5,<0.20.0"
 typing-extensions = ">=4.12.2,<5.0.0"
 
 [package.extras]
-chunking = ["semchunk (>=2.2.0,<3.0.0)", "transformers (>=4.34.0,<5.0.0)"]
-chunking-openai = ["semchunk", "tiktoken (>=0.9.0,<0.13.0)"]
+chunking = ["semchunk (>=2.2.0,<3.0.0)", "transformers (>=4.34.0,<5.0.0)", "tree-sitter (>=0.23.2,<1.0.0)", "tree-sitter-c (>=0.23.4,<1.0.0)", "tree-sitter-java (>=0.23.5,<1.0.0)", "tree-sitter-javascript (>=0.23.1,<1.0.0)", "tree-sitter-python (>=0.23.6,<1.0.0)", "tree-sitter-typescript (>=0.23.2,<1.0.0)"]
+chunking-openai = ["semchunk (>=2.2.0,<3.0.0)", "tiktoken (>=0.9.0,<0.13.0)", "tree-sitter (>=0.23.2,<1.0.0)", "tree-sitter-c (>=0.23.4,<1.0.0)", "tree-sitter-java (>=0.23.5,<1.0.0)", "tree-sitter-javascript (>=0.23.1,<1.0.0)", "tree-sitter-python (>=0.23.6,<1.0.0)", "tree-sitter-typescript (>=0.23.2,<1.0.0)"]
 
 [[package]]
 name = "docling-ibm-models"
@@ -4608,6 +4614,163 @@ torch-vision = ["Pillow (>=10.0.1,<=15.0)", "torchvision"]
 torchhub = ["filelock", "huggingface-hub (>=0.34.0,<1.0)", "importlib_metadata", "numpy (>=1.17)", "packaging (>=20.0)", "protobuf", "regex (!=2019.12.17)", "requests", "sentencepiece (>=0.1.91,!=0.1.92)", "tokenizers (>=0.21,<0.22)", "torch (>=2.1)", "tqdm (>=4.27)"]
 video = ["av"]
 vision = ["Pillow (>=10.0.1,<=15.0)"]
+
+[[package]]
+name = "tree-sitter"
+version = "0.25.2"
+description = "Python bindings to the Tree-sitter parsing library"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "tree-sitter-0.25.2.tar.gz", hash = "sha256:fe43c158555da46723b28b52e058ad444195afd1db3ca7720c59a254544e9c20"},
+    {file = "tree_sitter-0.25.2-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:72a510931c3c25f134aac2daf4eb4feca99ffe37a35896d7150e50ac3eee06c7"},
+    {file = "tree_sitter-0.25.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:44488e0e78146f87baaa009736886516779253d6d6bac3ef636ede72bc6a8234"},
+    {file = "tree_sitter-0.25.2-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:c2f8e7d6b2f8489d4a9885e3adcaef4bc5ff0a275acd990f120e29c4ab3395c5"},
+    {file = "tree_sitter-0.25.2-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:20b570690f87f1da424cd690e51cc56728d21d63f4abd4b326d382a30353acc7"},
+    {file = "tree_sitter-0.25.2-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:a0ec41b895da717bc218a42a3a7a0bfcfe9a213d7afaa4255353901e0e21f696"},
+    {file = "tree_sitter-0.25.2-cp310-cp310-win_amd64.whl", hash = "sha256:7712335855b2307a21ae86efe949c76be36c6068d76df34faa27ce9ee40ff444"},
+    {file = "tree_sitter-0.25.2-cp310-cp310-win_arm64.whl", hash = "sha256:a925364eb7fbb9cdce55a9868f7525a1905af512a559303bd54ef468fd88cb37"},
+    {file = "tree_sitter-0.25.2-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:b8ca72d841215b6573ed0655b3a5cd1133f9b69a6fa561aecad40dca9029d75b"},
+    {file = "tree_sitter-0.25.2-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:cc0351cfe5022cec5a77645f647f92a936b38850346ed3f6d6babfbeeeca4d26"},
+    {file = "tree_sitter-0.25.2-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:1799609636c0193e16c38f366bda5af15b1ce476df79ddaae7dd274df9e44266"},
+    {file = "tree_sitter-0.25.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:3e65ae456ad0d210ee71a89ee112ac7e72e6c2e5aac1b95846ecc7afa68a194c"},
+    {file = "tree_sitter-0.25.2-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:49ee3c348caa459244ec437ccc7ff3831f35977d143f65311572b8ba0a5f265f"},
+    {file = "tree_sitter-0.25.2-cp311-cp311-win_amd64.whl", hash = "sha256:56ac6602c7d09c2c507c55e58dc7026b8988e0475bd0002f8a386cce5e8e8adc"},
+    {file = "tree_sitter-0.25.2-cp311-cp311-win_arm64.whl", hash = "sha256:b3d11a3a3ac89bb8a2543d75597f905a9926f9c806f40fcca8242922d1cc6ad5"},
+    {file = "tree_sitter-0.25.2-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:ddabfff809ffc983fc9963455ba1cecc90295803e06e140a4c83e94c1fa3d960"},
+    {file = "tree_sitter-0.25.2-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:c0c0ab5f94938a23fe81928a21cc0fac44143133ccc4eb7eeb1b92f84748331c"},
+    {file = "tree_sitter-0.25.2-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:dd12d80d91d4114ca097626eb82714618dcdfacd6a5e0955216c6485c350ef99"},
+    {file = "tree_sitter-0.25.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:b43a9e4c89d4d0839de27cd4d6902d33396de700e9ff4c5ab7631f277a85ead9"},
+    {file = "tree_sitter-0.25.2-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:fbb1706407c0e451c4f8cc016fec27d72d4b211fdd3173320b1ada7a6c74c3ac"},
+    {file = "tree_sitter-0.25.2-cp312-cp312-win_amd64.whl", hash = "sha256:6d0302550bbe4620a5dc7649517c4409d74ef18558276ce758419cf09e578897"},
+    {file = "tree_sitter-0.25.2-cp312-cp312-win_arm64.whl", hash = "sha256:0c8b6682cac77e37cfe5cf7ec388844957f48b7bd8d6321d0ca2d852994e10d5"},
+    {file = "tree_sitter-0.25.2-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:0628671f0de69bb279558ef6b640bcfc97864fe0026d840f872728a86cd6b6cd"},
+    {file = "tree_sitter-0.25.2-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:f5ddcd3e291a749b62521f71fc953f66f5fd9743973fd6dd962b092773569601"},
+    {file = "tree_sitter-0.25.2-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:bd88fbb0f6c3a0f28f0a68d72df88e9755cf5215bae146f5a1bdc8362b772053"},
+    {file = "tree_sitter-0.25.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:b878e296e63661c8e124177cc3084b041ba3f5936b43076d57c487822426f614"},
+    {file = "tree_sitter-0.25.2-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:d77605e0d353ba3fe5627e5490f0fbfe44141bafa4478d88ef7954a61a848dae"},
+    {file = "tree_sitter-0.25.2-cp313-cp313-win_amd64.whl", hash = "sha256:463c032bd02052d934daa5f45d183e0521ceb783c2548501cf034b0beba92c9b"},
+    {file = "tree_sitter-0.25.2-cp313-cp313-win_arm64.whl", hash = "sha256:b3f63a1796886249bd22c559a5944d64d05d43f2be72961624278eff0dcc5cb8"},
+    {file = "tree_sitter-0.25.2-cp314-cp314-macosx_10_13_x86_64.whl", hash = "sha256:65d3c931013ea798b502782acab986bbf47ba2c452610ab0776cf4a8ef150fc0"},
+    {file = "tree_sitter-0.25.2-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:bda059af9d621918efb813b22fb06b3fe00c3e94079c6143fcb2c565eb44cb87"},
+    {file = "tree_sitter-0.25.2-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:eac4e8e4c7060c75f395feec46421eb61212cb73998dbe004b7384724f3682ab"},
+    {file = "tree_sitter-0.25.2-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:260586381b23be33b6191a07cea3d44ecbd6c01aa4c6b027a0439145fcbc3358"},
+    {file = "tree_sitter-0.25.2-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:7d2ee1acbacebe50ba0f85fff1bc05e65d877958f00880f49f9b2af38dce1af0"},
+    {file = "tree_sitter-0.25.2-cp314-cp314-win_amd64.whl", hash = "sha256:4973b718fcadfb04e59e746abfbb0288694159c6aeecd2add59320c03368c721"},
+    {file = "tree_sitter-0.25.2-cp314-cp314-win_arm64.whl", hash = "sha256:b8d4429954a3beb3e844e2872610d2a4800ba4eb42bb1990c6a4b1949b18459f"},
+]
+
+[package.extras]
+docs = ["sphinx (>=8.1,<9.0)", "sphinx-book-theme"]
+tests = ["tree-sitter-html (>=0.23.2)", "tree-sitter-javascript (>=0.23.1)", "tree-sitter-json (>=0.24.8)", "tree-sitter-python (>=0.23.6)", "tree-sitter-rust (>=0.23.2)"]
+
+[[package]]
+name = "tree-sitter-c"
+version = "0.24.1"
+description = "C grammar for tree-sitter"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "tree_sitter_c-0.24.1-cp310-abi3-macosx_10_9_x86_64.whl", hash = "sha256:9c06ac26a1efdcc8b26a8a6970fbc6997c4071857359e5837d4c42892d45fe1e"},
+    {file = "tree_sitter_c-0.24.1-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:942bcd7cbecd810dcf7ca6f8f834391ebf0771a89479646d891ba4ca2fdfdc88"},
+    {file = "tree_sitter_c-0.24.1-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:9a74cfd7a11ca5a961fafd4d751892ee65acae667d2818968a6f079397d8d28c"},
+    {file = "tree_sitter_c-0.24.1-cp310-abi3-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a6a807705a3978911dc7ee26a7ad36dcfacb6adfc13c190d496660ec9bd66707"},
+    {file = "tree_sitter_c-0.24.1-cp310-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:789781afcb710df34144f7e2a20cd80e325114b9119e3956c6bd1dd2d365df98"},
+    {file = "tree_sitter_c-0.24.1-cp310-abi3-win_amd64.whl", hash = "sha256:290bff0f9c79c966496ebae45042f77543e6e4aea725f40587a8611d566231a8"},
+    {file = "tree_sitter_c-0.24.1-cp310-abi3-win_arm64.whl", hash = "sha256:d46bbda06f838c2dcb91daf767813671fd366b49ad84ff37db702129267b46e1"},
+    {file = "tree_sitter_c-0.24.1.tar.gz", hash = "sha256:7d2d0cda0b8dda428c81440c1e94367f9f13548eedca3f49768bde66b1422ad6"},
+]
+
+[package.extras]
+core = ["tree-sitter (>=0.24,<1.0)"]
+
+[[package]]
+name = "tree-sitter-java"
+version = "0.23.5"
+description = "Java grammar for tree-sitter"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "tree_sitter_java-0.23.5-cp39-abi3-macosx_10_9_x86_64.whl", hash = "sha256:355ce0308672d6f7013ec913dee4a0613666f4cda9044a7824240d17f38209df"},
+    {file = "tree_sitter_java-0.23.5-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:24acd59c4720dedad80d548fe4237e43ef2b7a4e94c8549b0ca6e4c4d7bf6e69"},
+    {file = "tree_sitter_java-0.23.5-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:9401e7271f0b333df39fc8a8336a0caf1b891d9a2b89ddee99fae66b794fc5b7"},
+    {file = "tree_sitter_java-0.23.5-cp39-abi3-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:370b204b9500b847f6d0c5ad584045831cee69e9a3e4d878535d39e4a7e4c4f1"},
+    {file = "tree_sitter_java-0.23.5-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:aae84449e330363b55b14a2af0585e4e0dae75eb64ea509b7e5b0e1de536846a"},
+    {file = "tree_sitter_java-0.23.5-cp39-abi3-win_amd64.whl", hash = "sha256:1ee45e790f8d31d416bc84a09dac2e2c6bc343e89b8a2e1d550513498eedfde7"},
+    {file = "tree_sitter_java-0.23.5-cp39-abi3-win_arm64.whl", hash = "sha256:402efe136104c5603b429dc26c7e75ae14faaca54cfd319ecc41c8f2534750f4"},
+    {file = "tree_sitter_java-0.23.5.tar.gz", hash = "sha256:f5cd57b8f1270a7f0438878750d02ccc79421d45cca65ff284f1527e9ef02e38"},
+]
+
+[package.extras]
+core = ["tree-sitter (>=0.22,<1.0)"]
+
+[[package]]
+name = "tree-sitter-javascript"
+version = "0.25.0"
+description = "JavaScript grammar for tree-sitter"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "tree_sitter_javascript-0.25.0-cp310-abi3-macosx_10_9_x86_64.whl", hash = "sha256:b70f887fb269d6e58c349d683f59fa647140c410cfe2bee44a883b20ec92e3dc"},
+    {file = "tree_sitter_javascript-0.25.0-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:8264a996b8845cfce06965152a013b5d9cbb7d199bc3503e12b5682e62bb1de1"},
+    {file = "tree_sitter_javascript-0.25.0-cp310-abi3-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:9dc04ba91fc8583344e57c1f1ed5b2c97ecaaf47480011b92fbeab8dda96db75"},
+    {file = "tree_sitter_javascript-0.25.0-cp310-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:199d09985190852e0912da2b8d26c932159be314bc04952cf917ed0e4c633e6b"},
+    {file = "tree_sitter_javascript-0.25.0-cp310-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:dfcf789064c58dc13c0a4edb550acacfc6f0f280577f1e7a00de3e89fc7f8ddc"},
+    {file = "tree_sitter_javascript-0.25.0-cp310-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:1b852d3aee8a36186dbcc32c798b11b4869f9b5041743b63b65c2ef793db7a54"},
+    {file = "tree_sitter_javascript-0.25.0-cp310-abi3-win_amd64.whl", hash = "sha256:e5ed840f5bd4a3f0272e441d19429b26eedc257abe5574c8546da6b556865e3c"},
+    {file = "tree_sitter_javascript-0.25.0-cp310-abi3-win_arm64.whl", hash = "sha256:622a69d677aa7f6ee2931d8c77c981a33f0ebb6d275aa9d43d3397c879a9bb0b"},
+    {file = "tree_sitter_javascript-0.25.0.tar.gz", hash = "sha256:329b5414874f0588a98f1c291f1b28138286617aa907746ffe55adfdcf963f38"},
+]
+
+[package.extras]
+core = ["tree-sitter (>=0.24,<1.0)"]
+
+[[package]]
+name = "tree-sitter-python"
+version = "0.25.0"
+description = "Python grammar for tree-sitter"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "tree_sitter_python-0.25.0-cp310-abi3-macosx_10_9_x86_64.whl", hash = "sha256:14a79a47ddef72f987d5a2c122d148a812169d7484ff5c75a3db9609d419f361"},
+    {file = "tree_sitter_python-0.25.0-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:480c21dbd995b7fe44813e741d71fed10ba695e7caab627fb034e3828469d762"},
+    {file = "tree_sitter_python-0.25.0-cp310-abi3-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:86f118e5eecad616ecdb81d171a36dde9bef5a0b21ed71ea9c3e390813c3baf5"},
+    {file = "tree_sitter_python-0.25.0-cp310-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:be71650ca2b93b6e9649e5d65c6811aad87a7614c8c1003246b303f6b150f61b"},
+    {file = "tree_sitter_python-0.25.0-cp310-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:e6d5b5799628cc0f24691ab2a172a8e676f668fe90dc60468bee14084a35c16d"},
+    {file = "tree_sitter_python-0.25.0-cp310-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:71959832fc5d9642e52c11f2f7d79ae520b461e63334927e93ca46cd61cd9683"},
+    {file = "tree_sitter_python-0.25.0-cp310-abi3-win_amd64.whl", hash = "sha256:9bcde33f18792de54ee579b00e1b4fe186b7926825444766f849bf7181793a76"},
+    {file = "tree_sitter_python-0.25.0-cp310-abi3-win_arm64.whl", hash = "sha256:0fbf6a3774ad7e89ee891851204c2e2c47e12b63a5edbe2e9156997731c128bb"},
+    {file = "tree_sitter_python-0.25.0.tar.gz", hash = "sha256:b13e090f725f5b9c86aa455a268553c65cadf325471ad5b65cd29cac8a1a68ac"},
+]
+
+[package.extras]
+core = ["tree-sitter (>=0.24,<1.0)"]
+
+[[package]]
+name = "tree-sitter-typescript"
+version = "0.23.2"
+description = "TypeScript and TSX grammars for tree-sitter"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "tree_sitter_typescript-0.23.2-cp39-abi3-macosx_10_9_x86_64.whl", hash = "sha256:3cd752d70d8e5371fdac6a9a4df9d8924b63b6998d268586f7d374c9fba2a478"},
+    {file = "tree_sitter_typescript-0.23.2-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:c7cc1b0ff5d91bac863b0e38b1578d5505e718156c9db577c8baea2557f66de8"},
+    {file = "tree_sitter_typescript-0.23.2-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:4b1eed5b0b3a8134e86126b00b743d667ec27c63fc9de1b7bb23168803879e31"},
+    {file = "tree_sitter_typescript-0.23.2-cp39-abi3-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:e96d36b85bcacdeb8ff5c2618d75593ef12ebaf1b4eace3477e2bdb2abb1752c"},
+    {file = "tree_sitter_typescript-0.23.2-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:8d4f0f9bcb61ad7b7509d49a1565ff2cc363863644a234e1e0fe10960e55aea0"},
+    {file = "tree_sitter_typescript-0.23.2-cp39-abi3-win_amd64.whl", hash = "sha256:3f730b66396bc3e11811e4465c41ee45d9e9edd6de355a58bbbc49fa770da8f9"},
+    {file = "tree_sitter_typescript-0.23.2-cp39-abi3-win_arm64.whl", hash = "sha256:05db58f70b95ef0ea126db5560f3775692f609589ed6f8dd0af84b7f19f1cbb7"},
+    {file = "tree_sitter_typescript-0.23.2.tar.gz", hash = "sha256:7b167b5827c882261cb7a50dfa0fb567975f9b315e87ed87ad0a0a3aedb3834d"},
+]
+
+[package.extras]
+core = ["tree-sitter (>=0.23,<1.0)"]
 
 [[package]]
 name = "triton"

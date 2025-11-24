@@ -13,6 +13,7 @@ from docling.datamodel.pipeline_options_vlm_model import ApiVlmOptions, Response
 from docling.datamodel.base_models import DocumentStream, InputFormat
 from docling.document_converter import DocumentConverter, ImageFormatOption
 from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
+from docling.backend.image_backend import ImageDocumentBackend
 from loguru import logger
 
 from modules.parser.v1.abc.abc import ParserABC
@@ -32,11 +33,11 @@ class ImageParser(ParserABC):
         self.vlm_model_name = vlm_model_name
         self.vlm_api_key = vlm_api_key
         self.pipeline_options = VlmPipelineOptions(enable_remote_services=True,
-                                                   
-                                                   do_picture_classification=False,
+                                                   do_picture_classification=True,
                                                    generate_page_images=True,
                                                    do_picture_description=False
                                                    )
+        self.artifacts_path = settings.ARTIFACTS_PATH
         self.converter = DocumentConverter()
 
     def convert_image_to_bytes_io(self, image: Union[Path, str, Image.Image]):
@@ -58,7 +59,7 @@ class ImageParser(ParserABC):
                         prompt: str,
                         format: ResponseFormat = ResponseFormat.MARKDOWN,
                         temperature: float = 0.7,
-                        max_tokens: int = 20000,
+                        max_tokens: int = 32000,
                         skip_special_tokens=False,
                     ):
         headers = dict(Authorization=f"Bearer {self.vlm_api_key}")
@@ -82,45 +83,7 @@ class ImageParser(ParserABC):
 
     def _get_prompt(self):
         prompt = """
-            You are an expert at converting documents, especially academic and technical materials, into perfectly formatted markdown.
-        Your primary goal is to capture 100% of the textual and structural content from the provided image.   
-        CRITICAL INSTRUCTIONS: 
-        TEXT DETECTION FIRST:
-        Before any processing, determine whether the image contains any human-readable text (letters, digits, symbols that form words, equations, labels, etc.).
-        → If the image contains no text whatsoever 
-        (e.g., it's a logo, icon, diagram without labels, pure illustration, or decorative graphic), output an empty string — nothing else. 
-        COMPLETE TEXT EXTRACTION (ONLY IF TEXT IS PRESENT):
-        If text is detected, extract every word, number, and symbol. Pay special attention to headers, footers, side notes, captions, and text in complex layouts.
-        Reconstruct logical reading order (typically top-to-bottom, left-to-right).
-        Your absolute priority is to preserve all information. Formatting is secondary to completeness. 
-        Hierarchy & Text:
-        Use #, ##, ### for titles and headings.
-        Preserve paragraphs and line breaks.
-        Use **bold**, *italic*, and `code` for inline elements. 
-        Lists:
-        Convert bullet points into - items.
-        Convert numbered lists into 1., 2. items. 
-        Tables (VERY IMPORTANT):
-        Identify all tables. Recreate them using Markdown pipe syntax.
-        Alignment: :--- (left), :---: (center), ---: (right).
-        Separate header with |---| line.
-        For multiline cells, use <br/> if needed. 
-        Mathematical Formulas (VERY IMPORTANT):
-        Inline: $...$
-        Block: $$...$$ on separate lines.
-        If LaTeX is uncertain, describe plainly: (Formula: ...). 
-        Code Blocks:
-        Use triple backticks with language: python, javascript, etc. 
-        Accuracy and Handling Uncertainty:
-        Never invent or omit. Mark unclear parts as [?] or [undefined].
-        Preserve original order and structure meticulously. 
-        NO IMAGE DESCRIPTIONS:
-        Never describe visual elements (colors, layout, shapes) unless they contain text.
-        If there’s no text — output nothing. 
-        Output Requirements:   
-        If no text is present: return an empty string.  
-        If text is present: output only raw FLAT markdown, ready for a .md file.  
-        Never add introductions, explanations, or comments before/after the content
+            Convert to Markdown.
                  """
         return prompt
     
@@ -134,13 +97,13 @@ class ImageParser(ParserABC):
                             format_options={
                                 InputFormat.IMAGE: ImageFormatOption(
                                     pipeline_options=self.pipeline_options,
-                                    backend=PyPdfiumDocumentBackend,
+                                   backend=ImageDocumentBackend,
                                     pipeline_cls=VlmPipeline
                                 )
                             }
                         )
         
-    def parse(self, mode: ParserMods):
+    def parse(self, mode: ParserMods = ParserMods.TO_TEXT):
         logger.debug("Parsing Image...")
         self._set_converter_options()
         try:
