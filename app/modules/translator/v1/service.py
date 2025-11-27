@@ -18,7 +18,7 @@ from settings import settings
 
 
 class CustomModelTranslator(AbstractTranslator):
-    def __init__(self, source_text, source_language, target_language, include_image_in_output, max_concurrency: int = 5):
+    def __init__(self, source_text, source_language, target_language, include_image_in_output, max_concurrency: int = 30):
         super().__init__(source_text, source_language, target_language, include_image_in_output)
         self.document_converter = DocumentConverter()
 
