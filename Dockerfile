@@ -1,4 +1,4 @@
-FROM bitnamilegacy/pytorch:2.8.0-debian-12-r1 as production
+FROM bitnamilegacy/pytorch:2.8.0-debian-12-r1 AS production
 
 USER root
 ENV DEBIAN_FRONTEND noninteractive
@@ -30,7 +30,7 @@ RUN python3 -m pip uninstall opencv-python && \
     poetry install --without dev --no-root
 COPY . .
 
-RUN sed -i 's/\r$//' startup.sh
+WORKDIR /document-parser/app
+ENTRYPOINT [ "python", "main.py" ]
 
-ENTRYPOINT [ "/bin/sh", "./startup.sh" ]
 EXPOSE 8012
