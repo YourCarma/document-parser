@@ -38,7 +38,10 @@ class Settings(BaseSettings):
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "application/vnd.oasis.opendocument.text",
         "application/pdf",
-        'application/octet-stream',
+        "application/octet-stream",
+        "application/vnd.oasis.opendocument.text",
+        "application/vnd.oasis.opendocument.presentation",
+        "application/vnd.oasis.opendocument.spreadsheet"
     ]
 
     @property

@@ -35,8 +35,8 @@ async def translate_file_to_text(request_fastapi: Request, translator_data: Tran
             include_image_in_output=translator_data.include_image_in_output)
         
         parser = ParserFactory(parser_params).get_parser()
-        text = await run_in_process(parser.parse, request_fastapi.app.state.executor, ParserMods.TO_TEXT)
-        translator = CustomModelTranslator(text, source_language, target_language, translator_data.include_image_in_output)
+        parsed = await run_in_process(parser.parse, request_fastapi.app.state.executor, ParserMods.TO_FILE)
+        translator = CustomModelTranslator(Path(parsed), source_language, target_language, translator_data.include_image_in_output)
         transalted = await translator.translate(ParserMods.TO_TEXT)
         instance = TranslatorTextResponse(parsed_text=transalted)
         return instance
@@ -52,7 +52,7 @@ async def translate_file_to_text(request_fastapi: Request, translator_data: Tran
              description=f"""   
     """,
              tags=['Translator'])
-async def translate_file_to_text(request_fastapi: Request, translator_data: TranslatorRequest = Depends()) -> TranslatorTextResponse:
+async def translate_file_to_file(request_fastapi: Request, translator_data: TranslatorRequest = Depends()) -> TranslatorTextResponse:
     try:
         source_language = translator_data.source_language
         target_language = translator_data.target_language
@@ -66,15 +66,48 @@ async def translate_file_to_text(request_fastapi: Request, translator_data: Tran
             include_image_in_output=translator_data.include_image_in_output)
         
         parser = ParserFactory(parser_params).get_parser()
-        text = await run_in_process(parser.parse, request_fastapi.app.state.executor, ParserMods.TO_TEXT)
-        translator = CustomModelTranslator(text, source_language, target_language, translator_data.include_image_in_output)
-        transalted_path = await translator.translate(ParserMods.TO_FILE)
+        parsed = await run_in_process(parser.parse, request_fastapi.app.state.executor, ParserMods.TO_DOCLING)
+        translator = CustomModelTranslator(parsed, source_language, target_language, translator_data.include_image_in_output)
+        # transalted_path = await translator.translate(ParserMods.TO_FILE)
+        transalted_path = await translator.translate_docling(ParserMods.TO_FILE, parsed)
         return FileResponse(path=transalted_path, filename=str(Path(file_path).stem + ".md"))
-        return instance
     except Exception as e:
         logger.error(f"Error in request: {e}")
         raise e
     finally:
         await delete_file(file_path)
+        
+@router.post(path="/translator/file/word",
+             name="Transalting file to word",
+             summary="Translating to MD file",
+             description=f"""   
+    """,
+             tags=['Translator'])
+async def translate_file_to_word(request_fastapi: Request, translator_data: TranslatorRequest = Depends()) -> TranslatorTextResponse:
+    try:
+        source_language = translator_data.source_language
+        target_language = translator_data.target_language
+        logger.debug(f"Source language: {source_language}")
+        logger.debug(f"Target language: {target_language}")
+        file = translator_data.file
+        file_path = await save_file(file)
+        parser_params = ParserParams(
+            file_path=file_path,
+            parse_images=translator_data.parse_images,
+            include_image_in_output=translator_data.include_image_in_output)
+        
+        parser = ParserFactory(parser_params).get_parser()
+        parsed = await run_in_process(parser.parse, request_fastapi.app.state.executor, ParserMods.TO_DOCLING)
+        translator = CustomModelTranslator(parsed, source_language, target_language, translator_data.include_image_in_output)
+        # transalted_path = await translator.translate(ParserMods.TO_WORD)
+        transalted_path = await translator.translate_docling(ParserMods.TO_WORD, parsed)
+        return FileResponse(path=transalted_path, filename=f"{Path(file_path).stem}(переведенный).docx")
+    except Exception as e:
+        logger.error(f"Error in request: {e}")
+        raise e
+    finally:
+        await delete_file(file_path)
+        
+
 
 

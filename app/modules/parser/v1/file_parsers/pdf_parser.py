@@ -1,6 +1,7 @@
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
+import pypandoc
 from docling.document_converter import DocumentConverter
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.datamodel.base_models import  InputFormat
@@ -30,7 +31,8 @@ class PDFParser(ParserABC):
                                                    do_code_enrichment=True,
                                                    do_ocr=False
                                                    )
-
+        
+        
     def set_converter_options(self):
         self.converter = DocumentConverter(format_options={
                 InputFormat.PDF: PdfFormatOption(pipeline_options=self.pipeline_options,pipeline_cls=ThreadedStandardPdfPipeline, 
@@ -65,16 +67,34 @@ class PDFParser(ParserABC):
 
         match mode:
             case ParserMods.TO_FILE:
+                
                 logger.debug("Saving to .md file")
-                with NamedTemporaryFile(suffix=".md", delete=False) as tmp_file:
-                    doc.save_as_markdown(filename=tmp_file.name,artifacts_dir=self.artifacts_path, image_mode=self.image_mode)
+                with NamedTemporaryFile(suffix=".md", delete=False, mode="w", encoding="utf-8", delete_on_close=False) as tmp_file:
+                    markdown_content = doc.export_to_markdown(
+                        image_mode=self.image_mode,
+                        page_break_placeholder=self.page_break_placeholder
+                    )
+                    tmp_file.write(markdown_content)
+                    # doc.save_as_markdown(filename=tmp_file.name,
+                    #                      artifacts_dir=self.artifacts_path, 
+                    #                      image_mode=self.image_mode, 
+                    #                      page_break_placeholder=self.page_break_placeholder)
+
                     logger.success("File Saved!")
                     return tmp_file.name
             case ParserMods.TO_TEXT:
-                markdown = doc.export_to_markdown(image_mode=self.image_mode)
+              
+                markdown = doc.export_to_markdown(image_mode=self.image_mode, 
+                                                  page_break_placeholder=self.page_break_placeholder)
                 return markdown
             case ParserMods.TO_DOCLING:
                 return doc
+            case ParserMods.TO_WORD:
+                markdown = doc.export_to_markdown(image_mode=self.image_mode, 
+                                                  page_break_placeholder=self.page_break_placeholder)
+                with NamedTemporaryFile(suffix=".docx", delete=False) as tmp_file:
+                    pypandoc.convert_text(markdown, "docx", "md", outputfile=tmp_file.name)
+                    return tmp_file.name
             case _:
                 logger.error("Unknown parse mode!")
                 raise ValueError

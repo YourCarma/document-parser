@@ -16,6 +16,7 @@ class TranslatorRequest(BaseModel):
     file: UploadFile = File(description="Файл для парсинга")
     parse_images: Optional[bool]  = Field(description="Необходимо распознавать вложенные изображения (Необходимо наличие VLM)", default=False)
     include_image_in_output: Optional[bool] = Field(description="Вшивать изображения в текст вида `base64`", default=False)
+    full_vlm_pdf_parse: Optional[bool] = Field(description="Полный парсинг .pdf с помощью VLM (может занять куда больше времени)", default=False)
     source_language: Optional[str] = Field(description="Исходынй язык перевода", default="en")
     target_language: Optional[str] = Field(description="Целевой язык перевода", default="ru")
 

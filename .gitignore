@@ -167,3 +167,4 @@ app/notebooks/
 app/test_data/
 .env.dev
 test.md
+pandoc-3.8.3-1-amd64.deb

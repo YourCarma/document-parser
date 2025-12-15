@@ -14,6 +14,7 @@ class ParserRequest(BaseModel):
     file: UploadFile = File(description="Файл для парсинга")
     parse_images: Optional[bool]  = Field(description="Необходимо распознавать вложенные изображения (Необходимо наличие VLM)", default=False)
     include_image_in_output: Optional[bool] = Field(description="Вшивать изображения в текст вида `base64`", default=False)
+    full_vlm_pdf_parse: Optional[bool] = Field(description="Полный парсинг .pdf с помощью VLM (может занять куда больше времени)", default=False)
     
     @field_validator("file", mode="after")  
     @classmethod
@@ -37,9 +38,9 @@ class DocLingAPIVLMOptionsParams(BaseModel):
 class FileFormats(list[str], enum.Enum):
     IMAGE = [".jpg", ".jpeg", ".png", ".tiff", ".bmp", ".webp"]
     PDF = [".pdf"]
-    DOC = [".docx"]
-    PPTX = [".pptx"]
-    XLSX = [".xlsx"]
+    DOC = [".docx", ".odt", ".doc"]
+    PPTX = [".pptx", ".odp"]
+    XLSX = [".xlsx", ".ods"]
     HTML = [".html"]
     TXT = [".txt"]
 
@@ -47,8 +48,15 @@ class ParserMods(str, enum.Enum):
     TO_TEXT = "to_text"
     TO_FILE = "to_file"
     TO_DOCLING = "to_docling"
+    TO_WORD = "to_word"
     
 class ParserParams(BaseModel):
     file_path: Union[str, Path] = Field(description="Путь к файлу")
-    parse_images: Optional[bool]  = Field(description="Необходимо распознавать вложенные изображения (Необходимо наличие VLM)", default=True)
+    parse_images: Optional[bool]  = Field(description="Необходимо распознавать вложенные изображения (Необходимо наличие VLM)", default=False)
     include_image_in_output: Optional[bool] = Field(description="Вшивать изображения в текст вида `base64`", default=True)
+    full_vlm_pdf_parse: Optional[bool] = Field(description="Полный парсинг .pdf с помощью VLM (может занять куда больше времени)", default=False)
+    
+    
+class ConvertationOutputs(str, enum.Enum):
+    DOCUMENTS = "docx"
+    PRESENTATION = "pptx"

@@ -6,6 +6,7 @@ import requests
 from uuid import uuid4
 from tempfile import NamedTemporaryFile
 
+import pypandoc
 from docling.pipeline.vlm_pipeline import VlmPipeline
 from docling.document_converter import DocumentConverter
 from docling.datamodel.pipeline_options import VlmPipelineOptions
@@ -15,6 +16,7 @@ from docling.document_converter import DocumentConverter, ImageFormatOption
 from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
 from docling.backend.image_backend import ImageDocumentBackend
 from loguru import logger
+from urllib3 import exceptions
 
 from modules.parser.v1.abc.abc import ParserABC
 from settings import settings
@@ -34,7 +36,7 @@ class ImageParser(ParserABC):
         self.vlm_api_key = vlm_api_key
         self.pipeline_options = VlmPipelineOptions(enable_remote_services=True,
                                                    do_picture_classification=True,
-                                                   generate_page_images=True,
+                                                   generate_page_images=False,
                                                    do_picture_description=False
                                                    )
         self.artifacts_path = settings.ARTIFACTS_PATH
@@ -59,7 +61,7 @@ class ImageParser(ParserABC):
                         prompt: str,
                         format: ResponseFormat = ResponseFormat.MARKDOWN,
                         temperature: float = 0.7,
-                        max_tokens: int = 32000,
+                        max_tokens: int = 6000,
                         skip_special_tokens=False,
                     ):
         headers = dict(Authorization=f"Bearer {self.vlm_api_key}")
@@ -108,22 +110,39 @@ class ImageParser(ParserABC):
         self._set_converter_options()
         try:
             self.source_file = self.convert_image_to_bytes_io(self.source_file)
-            doc = self.converter.convert(self.source_file).document
+            doc = self.converter.convert(self.source_file, raises_on_error=True)
+            converted = doc.document
+            markdown = converted.export_to_markdown()
+
+            if not markdown.strip():
+                logger.error("VLM failed silently: returned empty markdown")
+                raise ServiceUnavailable("VLM", self.vlm_base_url)
             logger.success("Document have been parsed!")
             match mode:
                 case ParserMods.TO_FILE:
                     logger.debug("Saving to .md file")
                     with NamedTemporaryFile(suffix=".md", delete=False) as tmp_file:
-                        doc.save_as_markdown(filename=tmp_file.name,artifacts_dir=self.artifacts_path)
+                        converted.save_as_markdown(filename=tmp_file.name,artifacts_dir=self.artifacts_path)
                         logger.success("File Saved!")
                         return tmp_file.name
                 case ParserMods.TO_TEXT:
-                    markdown = doc.export_to_markdown()
+                    markdown = converted.export_to_markdown()
                     return markdown
+                case ParserMods.TO_WORD:
+                    markdown = converted.export_to_markdown(image_mode=self.image_mode, 
+                                                    page_break_placeholder=self.page_break_placeholder)
+                    with NamedTemporaryFile(suffix=".docx", delete=False) as tmp_file:
+                        pypandoc.convert_text(markdown, "docx", "md", outputfile=tmp_file.name)
+                        return tmp_file.name
+                case ParserMods.TO_DOCLING:
+                    return converted
                 case _:
                     logger.error("Unknown parse mode!")
                     raise ValueError
         except requests.exceptions.ConnectionError as e:
+            logger.error(f"VLM is not available: {e}")
+            raise ServiceUnavailable("VLM", settings.VLM_BASE_URL)
+        except exceptions.NewConnectionError as e:
             logger.error(f"VLM is not available: {e}")
             raise ServiceUnavailable("VLM", settings.VLM_BASE_URL)
         except requests.exceptions.HTTPError as e:

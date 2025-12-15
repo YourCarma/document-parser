@@ -26,6 +26,7 @@ class ParserABC(ABC):
         self.image_mode = ImageRefMode.EMBEDDED if self.parser_params.include_image_in_output else ImageRefMode.PLACEHOLDER
         self.artifacts_path=settings.ARTIFACTS_PATH
         self.converter = DocumentConverter()
+        self.page_break_placeholder = "\n---\n\n\n\n"
 
     def parse_with_docling(self, file_path: Path) -> str:
         try:

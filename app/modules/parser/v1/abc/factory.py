@@ -4,7 +4,9 @@ from loguru import logger
 
 from modules.parser.v1.schemas import FileFormats, ParserParams
 from modules.parser.v1.exceptions import ContentNotSupportedError, ServiceUnavailable, TimeoutError
-from modules.parser.v1.file_parsers import ImageParser, PPTXParser, DocParser, XLSXParser,PDFParser, HTMLParser, TXTParser
+from modules.parser.v1.file_parsers import ImageParser, PPTXParser, DocParser, XLSXParser,PDFParser, HTMLParser, TXTParser, PDFVLMParser
+from modules.parser.v1.utils import convert_doc_to
+
 
 class ParserFactory():
     def __init__(self, parser_params: ParserParams):
@@ -30,20 +32,27 @@ class ParserFactory():
                 return ImageParser(self.parser_params.file_path)
             
             case file_format if file_format in self.XLSX_FORMATS:
+                self.parser_params.file_path = convert_doc_to(self.parser_params.file_path, "xlsx")
                 logger.debug("XLSX Parser Created!")
                 return XLSXParser(self.parser_params)
             
             case file_format if file_format in self.DOC_FORMATS:
+                self.parser_params.file_path = convert_doc_to(self.parser_params.file_path, "docx")
                 logger.debug("Doc Parser Created!")
                 return DocParser(self.parser_params)
             
             case file_format if file_format in self.PPTX_FORMATS:
+                self.parser_params.file_path = convert_doc_to(self.parser_params.file_path, "pptx")
                 logger.debug("PPTX Parser Created!")
                 return PPTXParser(self.parser_params)
             
-            case file_format if file_format in self.PDF_FORMATS:
+            case file_format if file_format in self.PDF_FORMATS and not self.parser_params.full_vlm_pdf_parse:
                 logger.debug("PDF Parser Created!")
                 return PDFParser(self.parser_params)
+            
+            case file_format if file_format in self.PDF_FORMATS and self.parser_params.full_vlm_pdf_parse:
+                logger.debug("PDF VLM Parser Created!")
+                return PDFVLMParser(self.parser_params.file_path)
             
             case file_format if file_format in self.HTML_FORMATS:
                 logger.debug("HTML Parser Created!")

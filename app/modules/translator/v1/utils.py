@@ -1,5 +1,6 @@
 from typing import Optional
 import json
+from pathlib import Path
 
 from fastapi import HTTPException, Response
 import aiohttp
@@ -52,3 +53,16 @@ def retry(times, exceptions):
             return func(*args, **kwargs)
         return newfn
     return decorator
+
+def ensure_utf8(path: str) -> str:
+    p = Path(path)
+    raw = p.read_bytes()
+
+    try:
+        raw.decode("utf-8")
+        return path  
+    except UnicodeDecodeError:
+        text = raw.decode("latin-1") 
+        new_path = p.with_suffix(".utf8.md")
+        new_path.write_text(text, encoding="utf-8")
+        return str(new_path)
