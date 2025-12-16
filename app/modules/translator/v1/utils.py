@@ -17,12 +17,12 @@ async def post_request(url: str, payload: dict) -> Response:
                     if resp.status >= 400:
                         raise HTTPException(
                             status_code=resp.status,
-                            detail=response_body.decode("utf-8") if response_body else None
+                            detail=f"Error from text-translator occured: {response_body.decode('utf-8') if response_body else None}"
                         )
                     
                     elif resp.status == 500:
                         logger.warning("Internal server error")
-                        return ""
+                        return "Error from text-translator occured."
                     return await resp.json()
                         
             except aiohttp.ClientError as e:
@@ -53,16 +53,3 @@ def retry(times, exceptions):
             return func(*args, **kwargs)
         return newfn
     return decorator
-
-def ensure_utf8(path: str) -> str:
-    p = Path(path)
-    raw = p.read_bytes()
-
-    try:
-        raw.decode("utf-8")
-        return path  
-    except UnicodeDecodeError:
-        text = raw.decode("latin-1") 
-        new_path = p.with_suffix(".utf8.md")
-        new_path.write_text(text, encoding="utf-8")
-        return str(new_path)

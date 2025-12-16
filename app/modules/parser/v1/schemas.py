@@ -23,7 +23,8 @@ class ParserRequest(BaseModel):
         logger.debug(f"MIME type: {file.content_type}")
         logger.debug(f"File Size: {file.size}")
         if file.content_type not in settings.ALLOWED_MIME_TYPES:
-            raise ContentNotSupportedError(f"Данный формат файла \"{file.filename.split(".")[-1]}\" не поддерживается")
+            file_extension = file.filename.split(".")[-1]
+            raise ContentNotSupportedError(f"Данный формат файла \"{file_extension}\" не поддерживается")
         logger.success("File MIME type supported!")
         return file
     

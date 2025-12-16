@@ -17,9 +17,9 @@ router = APIRouter(prefix="/api/v1/parser")
 
 @router.post(path="/parse/text",
              name="File parsing",
-             summary="Парсинг файлов в текст",
+             summary="Парсинг файлов в MD текст",
              description=f"""   
-    ## Парсинг файлов в ТЕКСТ
+    ## Парсинг файлов в MD ТЕКСТ
   ### Поддерживаемые MIME-типы:
   ```python 
   {settings.ALLOWED_MIME_TYPES}
@@ -33,11 +33,11 @@ router = APIRouter(prefix="/api/v1/parser")
  * **HTML**: `{FileFormats.HTML.value}`
  * **PPTX**: `{FileFormats.PPTX.value}`
  * **TXT**: `{FileFormats.TXT.value}`
-  ### Параметры запроса:
+  ### Параметры запроса (QUERY):
  1. `parse_images`: `bool | None` - Необходимо распознавать текст на изображениях (**требуется** подключение к VLM, может занимать больше времени)
  2. `include_image_in_output`: `bool | None` - Вшивать изображения исходного документа в **OUTPUT** в виде `base64` (Может излишне нагружать markdown)
+ 3. `full_vlm_pdf_parse`: `bool | None` - Полный парсинг .pdf с помощью VLM (может занять куда больше времени, возврат без картинок)
 
- 
   ### Возвращаемый объект:
  ```python
  {ParserTextResponse.model_fields}
@@ -83,7 +83,7 @@ async def parse_to_text(request_fastapi: Request, parser_data: ParserRequest = D
   ### Параметры запроса:
  1. `parse_images`: `bool | None` - Необходимо распознавать текст на изображениях (**требуется** подключение к VLM, может занимать больше времени)
  2. `include_image_in_output`: `bool | None` - Вшивать изображения исходного документа в **OUTPUT** в виде `base64` (Может излишне нагружать markdown)
-
+ 3. `full_vlm_pdf_parse`: `bool | None` - Полный парсинг .pdf с помощью VLM (может занять куда больше времени, возврат без картинок)
  
   ### Возвращаемый объект:
  ```python
@@ -109,10 +109,10 @@ async def parse_to_file(request_fastapi: Request, parser_data: ParserRequest = D
         await delete_file(file_path)
         
 @router.post(path="/parse/file/word",
-             name="File parsing to **MD FILE**",
+             name="File parsing to WORD FILE",
              summary="Парсинг файлов в файл",
              description=f"""   
-    ## Парсинг файлов в MARKDOWN ФАЙЛ
+    ## Парсинг файлов в WORD ФАЙЛ
   ### Поддерживаемые MIME-типы:
   ```python 
   {settings.ALLOWED_MIME_TYPES}
@@ -129,7 +129,7 @@ async def parse_to_file(request_fastapi: Request, parser_data: ParserRequest = D
   ### Параметры запроса:
  1. `parse_images`: `bool | None` - Необходимо распознавать текст на изображениях (**требуется** подключение к VLM, может занимать больше времени)
  2. `include_image_in_output`: `bool | None` - Вшивать изображения исходного документа в **OUTPUT** в виде `base64` (Может излишне нагружать markdown)
-
+ 3. `full_vlm_pdf_parse`: `bool | None` - Полный парсинг .pdf с помощью VLM (может занять куда больше времени, возврат без картинок)
  
   ### Возвращаемый объект:
  ```python
