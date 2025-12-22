@@ -54,7 +54,7 @@ class ParserMods(str, enum.Enum):
 class ParserParams(BaseModel):
     file_path: Union[str, Path] = Field(description="Путь к файлу")
     parse_images: Optional[bool]  = Field(description="Необходимо распознавать вложенные изображения (Необходимо наличие VLM)", default=False)
-    include_image_in_output: Optional[bool] = Field(description="Вшивать изображения в текст вида `base64`", default=True)
+    include_image_in_output: Optional[bool] = Field(description="Вшивать изображения в текст вида `base64`", default=False)
     full_vlm_pdf_parse: Optional[bool] = Field(description="Полный парсинг .pdf с помощью VLM (может занять куда больше времени)", default=False)
     
     

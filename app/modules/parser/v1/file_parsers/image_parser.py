@@ -22,6 +22,7 @@ from modules.parser.v1.abc.abc import ParserABC
 from settings import settings
 from modules.parser.v1.schemas import DocLingAPIVLMOptionsParams, ParserMods
 from modules.parser.v1.exceptions import ServiceUnavailable, TimeoutError
+from settings import settings
 
 
 class ImageParser(ParserABC):
@@ -61,7 +62,7 @@ class ImageParser(ParserABC):
                         prompt: str,
                         format: ResponseFormat = ResponseFormat.MARKDOWN,
                         temperature: float = 0.7,
-                        max_tokens: int = 6000,
+                        max_tokens: int = 32000,
                         skip_special_tokens=False,
                     ):
         headers = dict(Authorization=f"Bearer {self.vlm_api_key}")
@@ -76,8 +77,8 @@ class ImageParser(ParserABC):
                     params=api_vlm_params,
                     headers=headers,
                     prompt=prompt,
-                    timeout=25,
-                    scale=2,
+                    timeout=settings.VLM_TIMEOUT_SECS,
+                    scale=1,
                     temperature=temperature,
                     response_format=format,
                 )
@@ -85,7 +86,7 @@ class ImageParser(ParserABC):
 
     def _get_prompt(self):
         prompt = """
-            Convert to Markdown.
+            Convert this image to Markdown. Don't give me a link for image.
                  """
         return prompt
     
@@ -93,7 +94,7 @@ class ImageParser(ParserABC):
         logger.debug("Setting VLM Options...")
         prompt = self._get_prompt()
         self.pipeline_options.vlm_options = self._openai_compatible_vlm_options(
-                                                prompt=prompt, format=ResponseFormat.MARKDOWN
+                                                prompt=prompt, format=ResponseFormat.MARKDOWN, max_tokens=settings.VLM_MAX_TOKENS
                                             )
         self.converter = DocumentConverter(
                             format_options={
@@ -129,8 +130,7 @@ class ImageParser(ParserABC):
                     markdown = converted.export_to_markdown()
                     return markdown
                 case ParserMods.TO_WORD:
-                    markdown = converted.export_to_markdown(image_mode=self.image_mode, 
-                                                    page_break_placeholder=self.page_break_placeholder)
+                    markdown = converted.export_to_markdown()
                     with NamedTemporaryFile(suffix=".docx", delete=False) as tmp_file:
                         pypandoc.convert_text(markdown, "docx", "md", outputfile=tmp_file.name)
                         return tmp_file.name

@@ -51,7 +51,8 @@ async def parse_to_text(request_fastapi: Request, parser_data: ParserRequest = D
         parser_params = ParserParams(
             file_path=file_path,
             parse_images=parser_data.parse_images,
-            include_image_in_output=parser_data.include_image_in_output)
+            include_image_in_output=parser_data.include_image_in_output,
+            full_vlm_pdf_parse=parser_data.full_vlm_pdf_parse)
         parser = ParserFactory(parser_params).get_parser()
         text = await run_in_process(parser.parse, request_fastapi.app.state.executor, ParserMods.TO_TEXT)
         instance = ParserTextResponse(parsed_text=text)
@@ -98,7 +99,8 @@ async def parse_to_file(request_fastapi: Request, parser_data: ParserRequest = D
         parser_params = ParserParams(
             file_path=file_path,
             parse_images=parser_data.parse_images,
-            include_image_in_output=parser_data.include_image_in_output)
+            include_image_in_output=parser_data.include_image_in_output,
+            full_vlm_pdf_parse=parser_data.full_vlm_pdf_parse)
         parser = ParserFactory(parser_params).get_parser()
         file = await run_in_process(parser.parse, request_fastapi.app.state.executor, ParserMods.TO_FILE)
         return FileResponse(path=file, filename=str(Path(file_path).stem + ".md"))
@@ -144,7 +146,8 @@ async def parse_to_file(request_fastapi: Request, parser_data: ParserRequest = D
         parser_params = ParserParams(
             file_path=file_path,
             parse_images=parser_data.parse_images,
-            include_image_in_output=parser_data.include_image_in_output)
+            include_image_in_output=parser_data.include_image_in_output,
+            full_vlm_pdf_parse=parser_data.full_vlm_pdf_parse)
         parser = ParserFactory(parser_params).get_parser()
         file = await run_in_process(parser.parse, request_fastapi.app.state.executor, ParserMods.TO_WORD)
         return FileResponse(path=file, filename=str(Path(file_path).stem + ".docx"))

@@ -63,8 +63,8 @@ class PDFVLMParser(ParserABC):
                     params=api_vlm_params,
                     headers=headers,
                     prompt=prompt,
-                    timeout=25,
-                    scale=2,
+                    timeout=settings.VLM_TIMEOUT_SECS,
+                    scale=1,
                     temperature=temperature,
                     response_format=format,
                 )
@@ -73,7 +73,7 @@ class PDFVLMParser(ParserABC):
     def set_converter_options(self):
         prompt = self._get_prompt()
         self.pipeline_options.vlm_options = self._openai_compatible_vlm_options(
-                                                prompt=prompt, format=ResponseFormat.MARKDOWN
+                                                prompt=prompt, format=ResponseFormat.MARKDOWN, max_tokens=settings.VLM_MAX_TOKENS
                                             )
         self.converter = DocumentConverter(format_options={
                 InputFormat.PDF: PdfFormatOption(
@@ -83,7 +83,7 @@ class PDFVLMParser(ParserABC):
     
     def _get_prompt(self):
         prompt = """
-            Convert these pdf pages to markdown.
+            Convert these pdf pages to markdown. 
                  """
         return prompt
     
@@ -91,6 +91,10 @@ class PDFVLMParser(ParserABC):
         logger.debug(f"Parsing {self.source_file}...")
         self.set_converter_options()
         doc = self.converter.convert(self.source_file).document
+        markdown = doc.export_to_markdown()
+
+        if not markdown.strip():
+            logger.error("VLM failed silently: returned empty markdown")
         logger.success(f"Document converted!")
         logger.debug("Cleaning documents")
 
@@ -107,8 +111,7 @@ class PDFVLMParser(ParserABC):
             case ParserMods.TO_DOCLING:
                 return doc
             case ParserMods.TO_WORD:
-                markdown = doc.export_to_markdown(image_mode=self.image_mode, 
-                                                  page_break_placeholder=self.page_break_placeholder)
+                markdown = doc.export_to_markdown(page_break_placeholder=self.page_break_placeholder)
                 with NamedTemporaryFile(suffix=".docx", delete=False) as tmp_file:
                     pypandoc.convert_text(markdown, "docx", "md", outputfile=tmp_file.name)
                     return tmp_file.name

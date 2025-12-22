@@ -11,7 +11,7 @@ import asyncio
 async def post_request(url: str, payload: dict) -> Response:
     async with aiohttp.ClientSession() as session:
             try:
-                async with session.post(url, json=payload, timeout=10000000 ) as resp:
+                async with session.post(url, json=payload, timeout=1000 ) as resp:
                     response_body = await resp.read()
                     
                     if resp.status >= 400:

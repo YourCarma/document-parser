@@ -18,13 +18,15 @@ class Settings(BaseSettings):
     VLM_BASE_URL: str = "localhost:8097"
     VLM_MODEL_NAME: str = "Qwen2.5-VL-7B-Instruct-Q6_K"
     VLM_API_KEY: str = "no-key-required"
-
+    VLM_MAX_TOKENS: int = 16000
+    VLM_TIMEOUT_SECS: int = 50
+    
     TRANSLATOR_ADDRESS: str = "http://localhost:8000"
     TRANSLATE_URI: str = "/translate/text"
 
-    SENTRY_GLITCH: str = "http://ef23c6cc19484d09b9a5d536d1a75436@192.168.0.15:8001/5"
-    SENTRY_ENVIRONMENT: str = "dev"
 
+    
+    
     ALLOWED_MIME_TYPES: List[str] = [
         "text/plain",
         "image/jpeg",

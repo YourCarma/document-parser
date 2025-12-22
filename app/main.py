@@ -18,16 +18,6 @@ from api.routers import routers
 async def lifespan(app: FastAPI):
     logger.warning("Starting service...")
     app.state.executor = ProcessPoolExecutor(max_workers=2)
-    # sentry_sdk.init(
-    #     dsn=settings.SENTRY_GLITCH,
-    #     integrations=[
-    #         FastApiIntegration(),
-    #         StarletteIntegration(),
-    #         LoggingIntegration(level=None, event_level=None),
-    #     ],
-    #     environment=settings.SENTRY_ENVIRONMENT,
-    #     traces_sample_rate=1.0
-    # )
     yield
     logger.warning("Closing service...")
     app.state.executor.shutdown()
@@ -48,22 +38,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# @app.middleware("http")
-# async def capture_exceptions_middleware(request: Request, call_next):
-#     try:
-#         response = await call_next(request)
-#         return response
-#     except Exception as exc:
-#         with sentry_sdk.push_scope() as scope:
-#             scope.set_context("request", {
-#                 "url": str(request.url),
-#                 "method": request.method,
-#                 "headers": dict(request.headers),
-#                 "query_params": dict(request.query_params),
-#             })
-#             sentry_sdk.capture_exception(exc)
-#         raise exc
     
 for router in routers:
     app.include_router(router)
