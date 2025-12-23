@@ -176,7 +176,7 @@ async def translate_file_to_word(request_fastapi: Request, translator_data: Tran
         
         parser = ParserFactory(parser_params).get_parser()
         parsed = await run_in_process(parser.parse, request_fastapi.app.state.executor, ParserMods.TO_DOCLING)
-        translator = CustomModelTranslator(parsed, source_language, target_language, translator_data.include_image_in_output)
+        translator = CustomModelTranslator(parsed, source_language, target_language, translator_data.include_image_in_output, max_concurrency=settings.TRANSALTOR_MAX_CONCURRENCY)
         # transalted_path = await translator.translate(ParserMods.TO_WORD)
         transalted_path = await translator.translate_docling(ParserMods.TO_WORD, parsed)
         return FileResponse(path=transalted_path, filename=f"{Path(file_path).stem}(переведенный).docx")

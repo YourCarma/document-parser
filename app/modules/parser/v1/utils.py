@@ -68,8 +68,13 @@ def convert_doc_to(input_file_path: Union[Path| str], output_format: Convertatio
         output_dir = os.path.dirname(input_file_path)
 
     cmd = [
-        'libreoffice', '--headless', '--convert-to', output_format,
-            '--outdir', output_dir, input_file_path
+         'libreoffice',
+    '--headless',
+    '--nologo',
+    '--nofirststartwizard',
+    '--convert-to', f'{output_format}:writer8',
+    '--outdir', output_dir,
+    input_file_path
     ]
     try:
         subprocess.run(cmd, check=True, capture_output=True)

@@ -5,6 +5,7 @@ import pypandoc
 from docling.document_converter import DocumentConverter
 from docling.datamodel.pipeline_options import PipelineOptions, PaginatedPipelineOptions
 from docling.datamodel.base_models import  InputFormat
+from docling.backend.msword_backend import MsWordDocumentBackend
 from docling.document_converter import DocumentConverter, WordFormatOption
 from loguru import logger
 from docling_core.types.doc import (
@@ -20,11 +21,11 @@ class DocParser(ParserABC):
     def __init__(self, parser_params: ParserParams):
         super().__init__(parser_params)
         self.converter = DocumentConverter()
-        self.pipeline_options = PaginatedPipelineOptions(artifacts_path=self.artifacts_path)
+        self.pipeline_options = PaginatedPipelineOptions(artifacts_path=self.artifacts_path, generate_page_images=True, generate_picture_images=True)
 
     def set_converter_options(self):
         self.converter = DocumentConverter(format_options={
-                InputFormat.DOCX: WordFormatOption(pipeline_options=self.pipeline_options)
+                InputFormat.DOCX: WordFormatOption(pipeline_options=self.pipeline_options, backend=MsWordDocumentBackend)
                 })
         
     def parse(self, mode: ParserMods):
@@ -36,14 +37,15 @@ class DocParser(ParserABC):
         for element, _level in doc.iterate_items():
             if isinstance(element, TextItem):
                 element.orig = element.text
+                element.text = self.normalize_unicode(element.text)
                 element.text = self.clean_text(text=element.text)
                 element.text = self.to_utf8(element.text)
 
             elif isinstance(element, TableItem):
                 for cell in element.data.table_cells:
                     cell.text = self.clean_text(text=cell.text)
-        logger.debug(f"Exctracting text from images...")
         if self.parser_params.parse_images:
+            logger.debug(f"Exctracting text from images...")
             for element, _level in doc.iterate_items():
                 if isinstance(element, PictureItem) or isinstance(element, TableItem):
                     logger.success(f"Image or Table detected")

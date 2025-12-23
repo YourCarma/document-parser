@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     
     TRANSLATOR_ADDRESS: str = "http://localhost:8000"
     TRANSLATE_URI: str = "/translate/text"
-
+    TRANSALTOR_MAX_CONCURRENCY: int = 15
 
     
     
