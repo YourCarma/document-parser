@@ -24,6 +24,7 @@ from docling_core.types.doc import (
 from modules.translator.v1.utils import retry
 
 from settings import settings
+from modules.translator.v1.exceptions import LanguageNotSupported
 
 
 class CustomModelTranslator(AbstractTranslator):
@@ -64,6 +65,14 @@ class CustomModelTranslator(AbstractTranslator):
         async with self.sem:
             return await self.translate_element(text)
 
+    
+    async def detect_language(self, text: str) -> str:
+        language_detect = {
+            "text": text
+        }
+        detected: dict = (await post_request(settings.DETECT_LANGUAGE_URL, language_detect)).get("detected_language")
+        return detected
+    
     retry(3, TimeoutError)
     async def translate_element(self, text: str) -> str:
         translate_body = self.create_translator_service_body(text).model_dump()
@@ -140,6 +149,23 @@ class CustomModelTranslator(AbstractTranslator):
                 raise ValueError
             
     async def translate_docling(self, mode: ParserMods, docling_data: DoclingDocument):
+        
+        if self.source_language == "auto":
+            logger.debug("Detecting language from first 3 paragraphs...")
+            sample_texts = []
+            for element, _level in docling_data.iterate_items():
+                if isinstance(element, TextItem) and element.text.strip():
+                    sample_texts.append(element.text)
+                    if len(sample_texts) >= 3:
+                        break
+        
+            if sample_texts:
+                combined_sample = "\n".join(sample_texts)
+                detected = await self.detect_language(combined_sample)
+                if not detected:
+                    raise LanguageNotSupported(detail="Language Detector: Язык не определен!")
+                self.source_language = detected
+                logger.info(f"Detected language: {self.source_language}")
         
         logger.debug("Translating elements...")
         text_item_translation_tasks = []

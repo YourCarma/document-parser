@@ -17,7 +17,7 @@ async def post_request(url: str, payload: dict) -> Response:
                     if resp.status >= 400:
                         raise HTTPException(
                             status_code=resp.status,
-                            detail=f"Error from text-translator occured: {response_body.decode('utf-8') if response_body else None}"
+                            detail=f"Получена ошибка с переводчика: {response_body.decode('utf-8') if response_body else None}"
                         )
                     
                     elif resp.status == 500:

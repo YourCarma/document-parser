@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     
     TRANSLATOR_ADDRESS: str = "http://localhost:8000"
     TRANSLATE_URI: str = "/translate/text"
+    
+    
+    DETECT_LANGUAGE_URL: str = "http://localhost:10015/api/v1/detect_language"
     TRANSALTOR_MAX_CONCURRENCY: int = 15
 
     
