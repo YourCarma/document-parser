@@ -36,9 +36,11 @@ class ImageParser(ParserABC):
         self.vlm_model_name = vlm_model_name
         self.vlm_api_key = vlm_api_key
         self.pipeline_options = VlmPipelineOptions(enable_remote_services=True,
-                                                   do_picture_classification=True,
+                                                   artifacts_path=settings.ARTIFACTS_PATH,
                                                    generate_page_images=False,
+                                                   do_picture_classification=False,
                                                    do_picture_description=False
+                                                
                                                    )
         self.artifacts_path = settings.ARTIFACTS_PATH
         self.converter = DocumentConverter()
@@ -73,7 +75,7 @@ class ImageParser(ParserABC):
                         ).model_dump()
 
         options = ApiVlmOptions(
-                    url=f"http://{self.vlm_base_url}/v1/chat/completions",
+                    url=f"{self.vlm_base_url}/v1/chat/completions",
                     params=api_vlm_params,
                     headers=headers,
                     prompt=prompt,
@@ -81,12 +83,20 @@ class ImageParser(ParserABC):
                     scale=1,
                     temperature=temperature,
                     response_format=format,
+                    concurrency=3
                 )
         return options
 
     def _get_prompt(self):
         prompt = """
-            Convert this image to Markdown. Don't give me a link for image.
+            Проанализируй изображение и выполни следующие действия:
+                1. Распознай весь текст, присутствующий на изображении
+                2. Не давай никаких описаний, комментариев или дополнительной информации
+                3. Преобразуй распознанный текст в корректный Markdown формат, сохраняя:
+                - Структуру текста (заголовки, абзацы, списки)
+                - Таблицы с соответствующим Markdown-синтаксисом
+                - Код или специальные блоки, если они присутствуют
+                4. Выведи только результат в формате Markdown
                  """
         return prompt
     
@@ -100,7 +110,7 @@ class ImageParser(ParserABC):
                             format_options={
                                 InputFormat.IMAGE: ImageFormatOption(
                                     pipeline_options=self.pipeline_options,
-                                   backend=ImageDocumentBackend,
+                                    backend=ImageDocumentBackend,
                                     pipeline_cls=VlmPipeline
                                 )
                             }

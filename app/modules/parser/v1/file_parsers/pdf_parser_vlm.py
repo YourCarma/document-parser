@@ -16,6 +16,7 @@ from docling.datamodel.pipeline_options_vlm_model import (
 from docling.document_converter import (
     DocumentConverter, PdfFormatOption
 )
+from docling.utils.deepseekocr_utils import parse_deepseekocr_markdown
 from docling.pipeline.vlm_pipeline import VlmPipeline
 
 from modules.parser.v1.file_parsers.image_parser import ImageParser
@@ -36,8 +37,9 @@ class PDFVLMParser(ParserABC):
         self.vlm_model_name = vlm_model_name
         self.vlm_api_key = vlm_api_key
         self.pipeline_options = VlmPipelineOptions(enable_remote_services=True,
-                                                   do_picture_classification=True,
-                                                   generate_page_images=True,
+                                                   do_picture_classification=False,
+                                                   artifacts_path=settings.ARTIFACTS_PATH,
+                                                   generate_page_images=False,
                                                    do_picture_description=False
                                                    )
         self.artifacts_path = settings.ARTIFACTS_PATH
@@ -48,18 +50,17 @@ class PDFVLMParser(ParserABC):
                         prompt: str,
                         format: ResponseFormat = ResponseFormat.MARKDOWN,
                         temperature: float = 0.7,
-                        max_tokens: int = 4096,
+                        max_tokens: int = 16000,
                         skip_special_tokens=False,
                     ):
         headers = dict(Authorization=f"Bearer {self.vlm_api_key}")
         api_vlm_params = DocLingAPIVLMOptionsParams(
                             model=self.vlm_model_name,
-                            max_tokens=max_tokens,
-                            skip_special_tokens=skip_special_tokens,
+                            max_tokens=max_tokens
                         ).model_dump()
 
         options = ApiVlmOptions(
-                    url=f"http://{self.vlm_base_url}/v1/chat/completions",
+                    url=f"{self.vlm_base_url}/v1/chat/completions",
                     params=api_vlm_params,
                     headers=headers,
                     prompt=prompt,
@@ -78,19 +79,34 @@ class PDFVLMParser(ParserABC):
         self.converter = DocumentConverter(format_options={
                 InputFormat.PDF: PdfFormatOption(
                     pipeline_options=self.pipeline_options,                           
-                    pipeline_cls=VlmPipeline,)
+                    pipeline_cls=VlmPipeline)
                 })
     
     def _get_prompt(self):
         prompt = """
-            Convert these pdf pages to markdown. 
+            ЗАДАНИЕ: КОНВЕРТАЦИЯ ДОКУМЕНТА
+
+Ты — конвертер. Твоя ЕДИНСТВЕННАЯ задача — преобразовать текст из предоставленного пользователем PDF в чистый Markdown. Ты НЕ пишешь статьи, не сочиняешь код и не даешь объяснений.
+
+ИНСТРУКЦИЯ К ВЫПОЛНЕНИЮ (соблюдай строго):
+1.  Дождись, когда пользователь пришлет содержимое PDF (текст, изображения таблиц).
+2.  Преобразуй полученный текст в Markdown, сохранив точную структуру (заголовки, абзацы, списки).
+3.  ВНУТРИ АБЗАЦЕВ УБЕРИ ВСЁ ФОРМАТИРОВАНИЕ: жирный (**жирный** → жирный), курсив (*курсив* → курсив) и т.д. Оставь только обычные слова.
+4.  Для структурных элементов ИСПОЛЬЗУЙ Markdown: # для заголовков, - для списков, > для цитат.
+5.  Если будут таблицы, представь их в простом Markdown-формате.
+6.  Ссылки оформи как [текст](url).
+
+ФИНАЛЬНЫЙ ВЫВОД:
+Выдай ТОЛЬКО итоговый Markdown-текст. Без преамбул, комментариев и пояснений. Начни сразу с конвертированного содержимого.
+
+Готов к приему текста PDF. Жду.
                  """
         return prompt
     
     def parse(self, mode: ParserMods):
         logger.debug(f"Parsing {self.source_file}...")
         self.set_converter_options()
-        doc = self.converter.convert(self.source_file).document
+        doc = self.converter.convert(self.source_file, raises_on_error=True).document
         markdown = doc.export_to_markdown()
 
         if not markdown.strip():
@@ -102,16 +118,16 @@ class PDFVLMParser(ParserABC):
             case ParserMods.TO_FILE:
                 logger.debug("Saving to .md file")
                 with NamedTemporaryFile(suffix=".md", delete=False) as tmp_file:
-                    doc.save_as_markdown(filename=tmp_file.name,artifacts_dir=self.artifacts_path, page_break_placeholder=self.page_break_placeholder)
+                    doc.save_as_markdown(filename=tmp_file.name,artifacts_dir=self.artifacts_path)
                     logger.success("File Saved!")
                     return tmp_file.name
             case ParserMods.TO_TEXT:
-                markdown = doc.export_to_markdown(page_break_placeholder=self.page_break_placeholder)
+                markdown = doc.export_to_markdown()
                 return markdown
             case ParserMods.TO_DOCLING:
                 return doc
             case ParserMods.TO_WORD:
-                markdown = doc.export_to_markdown(page_break_placeholder=self.page_break_placeholder)
+                markdown = doc.export_to_markdown()
                 with NamedTemporaryFile(suffix=".docx", delete=False) as tmp_file:
                     pypandoc.convert_text(markdown, "docx", "md", outputfile=tmp_file.name)
                     return tmp_file.name

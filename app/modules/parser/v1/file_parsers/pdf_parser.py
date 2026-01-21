@@ -10,6 +10,7 @@ from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
 from docling.backend.docling_parse_v2_backend import DoclingParseV2DocumentBackend
 from docling.backend.docling_parse_v4_backend import DoclingParseV4DocumentBackend
+from docling.backend.docling_parse_backend import DoclingParseDocumentBackend
 from loguru import logger
 from docling_core.types.doc import (
     ImageRef, PictureItem, TableItem, ImageRefMode, TextItem, DocItemLabel, TableData

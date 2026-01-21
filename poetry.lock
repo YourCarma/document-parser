@@ -524,14 +524,14 @@ wmi = ["wmi (>=1.5.1) ; platform_system == \"Windows\""]
 
 [[package]]
 name = "docling"
-version = "2.65.0"
+version = "2.68.0"
 description = "SDK and CLI for parsing PDF, DOCX, HTML, and more, to a unified document representation for powering downstream workflows such as gen AI applications."
 optional = false
 python-versions = "<4.0,>=3.9"
 groups = ["main"]
 files = [
-    {file = "docling-2.65.0-py3-none-any.whl", hash = "sha256:02b00096e2785c08924c9fa89034b918d90f0ee6625aacf20435d1d847c89d09"},
-    {file = "docling-2.65.0.tar.gz", hash = "sha256:64c6feccf808e19f6100aa9e2a6c71c992cd66e897cdfb33ccf15d0b62873b50"},
+    {file = "docling-2.68.0-py3-none-any.whl", hash = "sha256:97b2a4957e221973c69f1706da326fda8e973707d041778df12c01a5279e3e7e"},
+    {file = "docling-2.68.0.tar.gz", hash = "sha256:fabadc7aa807b96ac9bf85cc78f4fe343b5df658857386bc23541a9a6c116132"},
 ]
 
 [package.dependencies]
@@ -565,12 +565,12 @@ tqdm = ">=4.65.0,<5.0.0"
 typer = ">=0.12.5,<0.20.0"
 
 [package.extras]
-asr = ["mlx-whisper (>=0.4.3) ; python_version >= \"3.10\" and python_version < \"3.14\" and sys_platform == \"darwin\" and platform_machine == \"arm64\"", "openai-whisper (>=20250625) ; python_version < \"3.14\""]
+asr = ["mlx-whisper (>=0.4.3) ; python_version >= \"3.10\" and sys_platform == \"darwin\" and platform_machine == \"arm64\"", "openai-whisper (>=20250625)"]
 easyocr = ["easyocr (>=1.7,<2.0)"]
 ocrmac = ["ocrmac (>=1.0.0,<2.0.0) ; sys_platform == \"darwin\""]
 rapidocr = ["onnxruntime (>=1.7.0,<2.0.0) ; python_version < \"3.14\"", "rapidocr (>=3.3,<4.0.0)"]
 tesserocr = ["tesserocr (>=2.7.1,<3.0.0)"]
-vlm = ["accelerate (>=1.2.1,<2.0.0)", "mlx-vlm (>=0.3.0,<1.0.0) ; python_version >= \"3.10\" and python_version < \"3.14\" and sys_platform == \"darwin\" and platform_machine == \"arm64\"", "qwen-vl-utils (>=0.0.11)", "transformers (>=4.46.0,<5.0.0)", "vllm (>=0.10.0,<1.0.0) ; python_version >= \"3.10\" and python_version < \"3.14\" and sys_platform == \"linux\" and platform_machine == \"x86_64\""]
+vlm = ["accelerate (>=1.2.1,<2.0.0)", "mlx-vlm (>=0.3.0,<1.0.0) ; python_version >= \"3.10\" and sys_platform == \"darwin\" and platform_machine == \"arm64\"", "qwen-vl-utils (>=0.0.11)", "transformers (>=4.46.0,<5.0.0)", "vllm (>=0.10.0,<1.0.0) ; python_version >= \"3.10\" and python_version < \"3.14\" and sys_platform == \"linux\" and platform_machine == \"x86_64\""]
 
 [[package]]
 name = "docling-core"
@@ -5442,4 +5442,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.14"
-content-hash = "46d5018e4db1451f00ab41fe1f180fe76fc81b43d4daf820137c8dfef9d898f7"
+content-hash = "d32ea3f7cfbc40cde47e5725dc07fb16b3a8d95116f804b8e157556021c4941b"
