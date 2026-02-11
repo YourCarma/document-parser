@@ -24,7 +24,7 @@ class ParserABC(ABC):
     ):
         self.parser_params = parser_params
         self.source_file = parser_params.file_path
-        self.image_mode = ImageRefMode.EMBEDDED if self.parser_params.include_image_in_output else ImageRefMode.PLACEHOLDER
+        self.image_mode = ImageRefMode.REFERENCED if self.parser_params.include_image_in_output else ImageRefMode.PLACEHOLDER
         self.artifacts_path=settings.ARTIFACTS_PATH
         self.converter = DocumentConverter()
         self.page_break_placeholder = "\n---\n\n\n\n"

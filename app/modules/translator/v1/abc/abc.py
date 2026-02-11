@@ -12,9 +12,7 @@ class AbstractTranslator(ABC):
         self.target_language = target_language
         self.artifacts_path=settings.ARTIFACTS_PATH
         self.include_image_in_output =  include_image_in_output
-        self.image_mode = ImageRefMode.EMBEDDED if self.include_image_in_output else ImageRefMode.PLACEHOLDER
-        self.page_break_placeholder = "\n\n---\n\n"
+        self.image_mode = ImageRefMode.REFERENCED if self.include_image_in_output else ImageRefMode.PLACEHOLDER
+        self.page_break_placeholder = "\n---\n\n\n\n"
 
-    @abstractmethod
-    def translate(self, source_text):
-        pass
+### Заменить ``` на что-то другое

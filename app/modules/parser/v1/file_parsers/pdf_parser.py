@@ -1,5 +1,8 @@
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+import tempfile
+import atexit
+import shutil
 
 import pypandoc
 from docling.document_converter import DocumentConverter
@@ -71,6 +74,7 @@ class PDFParser(ParserABC):
                 
                 logger.debug("Saving to .md file")
                 with NamedTemporaryFile(suffix=".md", delete=False, mode="w", encoding="utf-8", delete_on_close=False) as tmp_file:
+                    
                     markdown_content = doc.export_to_markdown(
                         image_mode=self.image_mode,
                         page_break_placeholder=self.page_break_placeholder
@@ -91,10 +95,25 @@ class PDFParser(ParserABC):
             case ParserMods.TO_DOCLING:
                 return doc
             case ParserMods.TO_WORD:
-                markdown = doc.export_to_markdown(image_mode=self.image_mode, 
+                artifacts_dir = Path(tempfile.mkdtemp(prefix="artifacts_"))
+                doc_with_refs = doc._make_copy_with_refmode(
+                                        reference_path=artifacts_dir,
+                                        artifacts_dir=artifacts_dir,
+                                        image_mode=self.image_mode,
+                                        page_no=None
+                                    )
+                markdown = doc_with_refs.export_to_markdown(image_mode=self.image_mode, 
                                                   page_break_placeholder=self.page_break_placeholder)
                 with NamedTemporaryFile(suffix=".docx", delete=False) as tmp_file:
-                    pypandoc.convert_text(markdown, "docx", "md", outputfile=tmp_file.name)
+                    pypandoc.convert_text(markdown, 
+                            "docx", 
+                            format="md", 
+                            outputfile=tmp_file.name,
+                            extra_args=[
+                                '--standalone',
+                                f'--resource-path={artifacts_dir}'    
+                            ])
+                    shutil.rmtree(artifacts_dir, ignore_errors=True)
                     return tmp_file.name
             case _:
                 logger.error("Unknown parse mode!")
