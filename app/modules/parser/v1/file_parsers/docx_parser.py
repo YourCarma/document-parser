@@ -1,9 +1,14 @@
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+import tempfile
+import shutil
+import atexit
 
+import pypandoc
 from docling.document_converter import DocumentConverter
 from docling.datamodel.pipeline_options import PipelineOptions, PaginatedPipelineOptions
 from docling.datamodel.base_models import  InputFormat
+from docling.backend.msword_backend import MsWordDocumentBackend
 from docling.document_converter import DocumentConverter, WordFormatOption
 from loguru import logger
 from docling_core.types.doc import (
@@ -19,29 +24,31 @@ class DocParser(ParserABC):
     def __init__(self, parser_params: ParserParams):
         super().__init__(parser_params)
         self.converter = DocumentConverter()
-        self.pipeline_options = PaginatedPipelineOptions(artifacts_path=self.artifacts_path)
+        self.pipeline_options = PaginatedPipelineOptions(artifacts_path=self.artifacts_path, generate_page_images=True, generate_picture_images=True)
 
     def set_converter_options(self):
         self.converter = DocumentConverter(format_options={
-                InputFormat.DOCX: WordFormatOption(pipeline_options=self.pipeline_options)
+                InputFormat.DOCX: WordFormatOption(pipeline_options=self.pipeline_options, backend=MsWordDocumentBackend)
                 })
         
     def parse(self, mode: ParserMods):
         logger.debug(f"Parsing {self.parser_params.file_path}...")
         self.set_converter_options()
+        
         doc = self.converter.convert(self.parser_params.file_path).document
         logger.success(f"Document converted!")
         for element, _level in doc.iterate_items():
             if isinstance(element, TextItem):
                 element.orig = element.text
+                element.text = self.normalize_unicode(element.text)
                 element.text = self.clean_text(text=element.text)
                 element.text = self.to_utf8(element.text)
 
             elif isinstance(element, TableItem):
                 for cell in element.data.table_cells:
                     cell.text = self.clean_text(text=cell.text)
-        logger.debug(f"Exctracting text from images...")
         if self.parser_params.parse_images:
+            logger.debug(f"Exctracting text from images...")
             for element, _level in doc.iterate_items():
                 if isinstance(element, PictureItem) or isinstance(element, TableItem):
                     logger.success(f"Image or Table detected")
@@ -53,12 +60,35 @@ class DocParser(ParserABC):
             case ParserMods.TO_FILE:
                 logger.debug("Saving to .md file")
                 with NamedTemporaryFile(suffix=".md", delete=False) as tmp_file:
-                    doc.save_as_markdown(filename=tmp_file.name,artifacts_dir=self.artifacts_path, image_mode=self.image_mode)
+                    doc.save_as_markdown(filename=tmp_file.name,artifacts_dir=self.artifacts_path, image_mode=self.image_mode, page_break_placeholder=self.page_break_placeholder)
                     logger.success("File Saved!")
                     return tmp_file.name
             case ParserMods.TO_TEXT:
-                markdown = doc.export_to_markdown(image_mode=self.image_mode)
+                markdown = doc.export_to_markdown(image_mode=self.image_mode, page_break_placeholder=self.page_break_placeholder)
                 return markdown
+            case ParserMods.TO_WORD:
+                artifacts_dir = Path(tempfile.mkdtemp(prefix="artifacts_"))
+                doc_with_refs = doc._make_copy_with_refmode(
+                                        reference_path=artifacts_dir,
+                                        artifacts_dir=artifacts_dir,
+                                        image_mode=self.image_mode,
+                                        page_no=None
+                                    )
+                markdown = doc_with_refs.export_to_markdown(image_mode=self.image_mode, 
+                                                page_break_placeholder=self.page_break_placeholder)
+                with NamedTemporaryFile(suffix=".docx", delete=False) as tmp_file:
+                    pypandoc.convert_text(markdown, 
+                "docx", 
+                format="md", 
+                outputfile=tmp_file.name,
+                extra_args=[
+                    '--standalone',
+                    f'--resource-path={artifacts_dir}'    
+                ])
+                    shutil.rmtree(artifacts_dir, ignore_errors=True)
+                    return tmp_file.name
+            case ParserMods.TO_DOCLING:
+                return doc
             case _:
                 logger.error("Unknown parse mode!")
                 raise ValueError

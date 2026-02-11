@@ -1,5 +1,6 @@
 from typing import Optional
 import json
+from pathlib import Path
 
 from fastapi import HTTPException, Response
 import aiohttp
@@ -10,18 +11,18 @@ import asyncio
 async def post_request(url: str, payload: dict) -> Response:
     async with aiohttp.ClientSession() as session:
             try:
-                async with session.post(url, json=payload, timeout=10000000 ) as resp:
+                async with session.post(url, json=payload, timeout=1000 ) as resp:
                     response_body = await resp.read()
                     
                     if resp.status >= 400:
                         raise HTTPException(
                             status_code=resp.status,
-                            detail=response_body.decode("utf-8") if response_body else None
+                            detail=f"Получена ошибка с переводчика: {response_body.decode('utf-8') if response_body else None}"
                         )
                     
                     elif resp.status == 500:
                         logger.warning("Internal server error")
-                        return ""
+                        return "Error from text-translator occured."
                     return await resp.json()
                         
             except aiohttp.ClientError as e:

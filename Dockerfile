@@ -17,7 +17,9 @@ RUN apt-get update --fix-missing -y && \
     unrtf \
     libsm6 \
     libxext6 \
-    libreoffice -y && \
+    libreoffice \
+    pandoc \  
+    wget -y && \  
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -28,6 +30,7 @@ RUN python3 -m pip uninstall opencv-python && \
     poetry config virtualenvs.create false && \
     poetry config installer.max-workers 3 && \
     poetry install --without dev --no-root
+
 COPY . .
 
 WORKDIR /document-parser/app

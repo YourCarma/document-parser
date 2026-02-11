@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 from PIL.Image import Image
-import chardet
 import re
+import unicodedata
 
 import chardet
+import ftfy
 from loguru import logger
 from docling.document_converter import DocumentConverter
 from docling_core.types.doc import (
@@ -23,9 +24,10 @@ class ParserABC(ABC):
     ):
         self.parser_params = parser_params
         self.source_file = parser_params.file_path
-        self.image_mode = ImageRefMode.EMBEDDED if self.parser_params.include_image_in_output else ImageRefMode.PLACEHOLDER
+        self.image_mode = ImageRefMode.REFERENCED if self.parser_params.include_image_in_output else ImageRefMode.PLACEHOLDER
         self.artifacts_path=settings.ARTIFACTS_PATH
         self.converter = DocumentConverter()
+        self.page_break_placeholder = "\n---\n\n\n\n"
 
     def parse_with_docling(self, file_path: Path) -> str:
         try:
@@ -41,6 +43,7 @@ class ParserABC(ABC):
             raise e
         
     def to_utf8(self, text: str):
+        
         if isinstance(text, bytes):
             try:
                 return text.decode('utf-8')
@@ -48,19 +51,23 @@ class ParserABC(ABC):
                 encoding = chardet.detect(text)['encoding']
                 try:
                     return text.decode(encoding or 'utf-8')
-                except:
+                except Exception as e:
+                    logger.warning(f"Failed to decode bytes: {e}")
                     return text.decode('utf-8', errors='replace')
+
         
-  
         if isinstance(text, str):
-            try:
-                fixed = text.encode('latin-1').decode('cp1251')
-                return fixed
-            except (UnicodeEncodeError, UnicodeDecodeError):
-                return text
-        
+           
+            return ftfy.fix_text(text)
+
         return str(text)
 
+
+    def normalize_unicode(self, text: str) -> str:
+        if not text:
+            return text
+        return unicodedata.normalize("NFC", text)
+    
     def clean_text(self, text: str):
             
         def replace_uni(match):

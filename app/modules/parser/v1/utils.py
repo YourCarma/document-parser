@@ -1,12 +1,16 @@
 from pathlib import Path
 import tempfile
 import os
+from typing import Union, Optional
 import asyncio
 import aiofiles
 from aiofiles.os import remove as aioremove
+import subprocess
 
 from loguru import logger
 from fastapi import UploadFile
+
+from modules.parser.v1.schemas import ConvertationOutputs
 
 
 async def save_file(file: UploadFile) -> Path:
@@ -57,3 +61,27 @@ def read_file_content(file_path: Path):
 async def run_in_process(fn, app_executor, *args):
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(app_executor, fn, *args)
+
+def convert_doc_to(input_file_path: Union[Path| str], output_format: ConvertationOutputs, output_dir: Optional[Union[Path| str]] = None):
+    logger.debug(f"Covertation to {input_file_path} в {output_format}")
+    if not output_dir:
+        output_dir = os.path.dirname(input_file_path)
+
+    cmd = [
+         'libreoffice',
+    '--headless',
+    '--nologo',
+    '--nofirststartwizard',
+    '--convert-to', f'{output_format}:writer8',
+    '--outdir', output_dir,
+    input_file_path
+    ]
+    try:
+        subprocess.run(cmd, check=True, capture_output=True)
+        base_name = os.path.splitext(os.path.basename(input_file_path))[0]
+        output_path = os.path.join(output_dir, f"{base_name}.{output_format}")
+        logger.success(f"Document convertion sucsessful!. File path: {output_path}")
+        return output_path
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"Error converting dpcument: {e.stderr.decode()}. Returning original file")
+        return input_file_path

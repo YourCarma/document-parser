@@ -18,13 +18,18 @@ class Settings(BaseSettings):
     VLM_BASE_URL: str = "localhost:8097"
     VLM_MODEL_NAME: str = "Qwen2.5-VL-7B-Instruct-Q6_K"
     VLM_API_KEY: str = "no-key-required"
-
+    VLM_MAX_TOKENS: int = 16000
+    VLM_TIMEOUT_SECS: int = 50
+    
     TRANSLATOR_ADDRESS: str = "http://localhost:8000"
     TRANSLATE_URI: str = "/translate/text"
+    
+    
+    DETECT_LANGUAGE_URL: str = "http://localhost:10015/api/v1/detect_language"
+    TRANSALTOR_MAX_CONCURRENCY: int = 15
 
-    SENTRY_GLITCH: str = "http://ef23c6cc19484d09b9a5d536d1a75436@192.168.0.15:8001/5"
-    SENTRY_ENVIRONMENT: str = "dev"
-
+    
+    
     ALLOWED_MIME_TYPES: List[str] = [
         "text/plain",
         "image/jpeg",
@@ -38,7 +43,10 @@ class Settings(BaseSettings):
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "application/vnd.oasis.opendocument.text",
         "application/pdf",
-        'application/octet-stream',
+        "application/octet-stream",
+        "application/vnd.oasis.opendocument.text",
+        "application/vnd.oasis.opendocument.presentation",
+        "application/vnd.oasis.opendocument.spreadsheet"
     ]
 
     @property

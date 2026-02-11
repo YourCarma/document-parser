@@ -1,8 +1,11 @@
 import asyncio
+from pathlib import Path
+import shutil
+import tempfile
 
-from docling.document_converter import DocumentConverter
+import pypandoc
+
 from loguru import logger
-from docling.datamodel.base_models import  InputFormat
 
 from modules.translator.v1.abc.abc import AbstractTranslator
 from modules.translator.v1.utils import post_request
@@ -10,20 +13,20 @@ from tempfile import NamedTemporaryFile
 from modules.parser.v1.schemas import ParserMods
 from modules.translator.v1.schemas import CustomTranslatorBody
 from docling_core.types.doc import (
-    ImageRef, PictureItem, TableItem, ImageRefMode, TextItem, DocItemLabel, TableData
-)
+    TableItem,  TextItem, DoclingDocument )
 from modules.translator.v1.utils import retry
 
 from settings import settings
+from modules.translator.v1.exceptions import LanguageNotSupported
 
 
 class CustomModelTranslator(AbstractTranslator):
-    def __init__(self, source_text, source_language, target_language, include_image_in_output, max_concurrency: int = 30):
-        super().__init__(source_text, source_language, target_language, include_image_in_output)
-        self.document_converter = DocumentConverter()
-
+    def __init__(self, source: str | Path, source_language, target_language, include_image_in_output, max_concurrency: int = 10):
+        super().__init__(source, source_language, target_language, include_image_in_output)
+        
         self.sem = asyncio.Semaphore(max_concurrency)
-
+        
+  
     def create_translator_service_body(self, text: str) -> CustomTranslatorBody:
         return CustomTranslatorBody(
             text=text,
@@ -35,6 +38,14 @@ class CustomModelTranslator(AbstractTranslator):
         async with self.sem:
             return await self.translate_element(text)
 
+    
+    async def detect_language(self, text: str) -> str:
+        language_detect = {
+            "text": text
+        }
+        detected: dict = (await post_request(settings.DETECT_LANGUAGE_URL, language_detect)).get("detected_language")
+        return detected
+    
     retry(3, TimeoutError)
     async def translate_element(self, text: str) -> str:
         translate_body = self.create_translator_service_body(text).model_dump()
@@ -43,20 +54,35 @@ class CustomModelTranslator(AbstractTranslator):
         return translated
 
 
-    async def translate(self, mode: ParserMods):
-        convertation = self.document_converter.convert_string(self.source_text, InputFormat.MD, "TEXT_TO_TRANSLATE")
-        doc = convertation.document
-        logger.debug("Translating elements...")
+    async def translate_docling(self, mode: ParserMods, docling_data: DoclingDocument):
+        if self.source_language == "auto":
+            logger.debug("Detecting language from first 3 paragraphs...")
+            sample_texts = []
+            for element, _level in docling_data.iterate_items():
+                if isinstance(element, TextItem) and element.text.strip():
+                    sample_texts.append(element.text)
+                    if len(sample_texts) >= 3:
+                        break
         
+            if sample_texts:
+                combined_sample = "\n".join(sample_texts)
+                detected = await self.detect_language(combined_sample)
+                if not detected:
+                    raise LanguageNotSupported(detail="Language Detector: Язык не определен!")
+                self.source_language = detected
+                logger.info(f"Detected language: {self.source_language}")
+        
+        logger.debug("Translating elements...")
         text_item_translation_tasks = []
         text_elements = []
 
         cell_item_transaltion_tasks = []
         cell_items = []
         
-        for element, _level in doc.iterate_items():
+        for element, _level in docling_data.iterate_items():
             if isinstance(element, TextItem):
                 element.orig = element.text
+                logger.debug(element.orig)
                 text_item_translation_tasks.append(self.translate_element_limited(element.text))
                 text_elements.append(element)
 
@@ -68,14 +94,16 @@ class CustomModelTranslator(AbstractTranslator):
 
         if text_item_translation_tasks:
             logger.debug("Translating text items")
-            translated_texts = await asyncio.gather(*text_item_translation_tasks)
+            translated_texts: list[str] = await asyncio.gather(*text_item_translation_tasks)
             for element, translated_text in zip(text_elements, translated_texts):
+                translated_text = translated_text.replace('`', "*")
                 element.text = translated_text
 
         if cell_item_transaltion_tasks:
             logger.debug("Translating cells in tables")
             translated_cells = await asyncio.gather(*cell_item_transaltion_tasks)
             for cell, translated_text in zip(cell_items, translated_cells):
+                translated_text = translated_text.replace('`', "*")
                 cell.text = translated_text
 
 
@@ -83,22 +111,42 @@ class CustomModelTranslator(AbstractTranslator):
             case ParserMods.TO_FILE:
                 logger.debug("Saving to .md file")
                 with NamedTemporaryFile(suffix=".md", delete=False) as tmp_file:
-                    doc.save_as_markdown(
+                    docling_data.save_as_markdown(
                         filename=tmp_file.name,
                         artifacts_dir=settings.ARTIFACTS_PATH,
-                        image_mode=self.image_mode
+                        image_mode=self.image_mode,
+                        page_break_placeholder="---"
                     )
                     logger.success("File Saved!")
                     return tmp_file.name
 
             case ParserMods.TO_TEXT:
-                markdown = doc.export_to_markdown(image_mode=self.image_mode)
+                markdown = docling_data.export_to_markdown(image_mode=self.image_mode, page_break_placeholder=self.page_break_placeholder)
                 return markdown
-
-            case ParserMods.TO_DOCLING:
-                return doc
+            
+            case ParserMods.TO_WORD:
+                artifacts_dir = Path(tempfile.mkdtemp(prefix="artifacts_"))
+                doc_with_refs = docling_data._make_copy_with_refmode(
+                                        reference_path=artifacts_dir,
+                                        artifacts_dir=artifacts_dir,
+                                        image_mode=self.image_mode,
+                                        page_no=None
+                                    )
+                markdown = doc_with_refs.export_to_markdown(image_mode=self.image_mode, 
+                                                  page_break_placeholder=self.page_break_placeholder)
+                with NamedTemporaryFile(suffix=".docx", delete=False) as tmp_file:
+                    pypandoc.convert_text(markdown, 
+                            "docx", 
+                            format="md", 
+                            outputfile=tmp_file.name,
+                            extra_args=[
+                                '--standalone',
+                                f'--resource-path={artifacts_dir}',
+                                '--wrap=none'    
+                            ])
+                    shutil.rmtree(artifacts_dir, ignore_errors=True)
+                    return tmp_file.name
 
             case _:
                 logger.error("Unknown parse mode!")
                 raise ValueError
-

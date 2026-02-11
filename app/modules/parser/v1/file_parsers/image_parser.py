@@ -6,6 +6,7 @@ import requests
 from uuid import uuid4
 from tempfile import NamedTemporaryFile
 
+import pypandoc
 from docling.pipeline.vlm_pipeline import VlmPipeline
 from docling.document_converter import DocumentConverter
 from docling.datamodel.pipeline_options import VlmPipelineOptions
@@ -15,11 +16,13 @@ from docling.document_converter import DocumentConverter, ImageFormatOption
 from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
 from docling.backend.image_backend import ImageDocumentBackend
 from loguru import logger
+from urllib3 import exceptions
 
 from modules.parser.v1.abc.abc import ParserABC
 from settings import settings
 from modules.parser.v1.schemas import DocLingAPIVLMOptionsParams, ParserMods
 from modules.parser.v1.exceptions import ServiceUnavailable, TimeoutError
+from settings import settings
 
 
 class ImageParser(ParserABC):
@@ -33,9 +36,11 @@ class ImageParser(ParserABC):
         self.vlm_model_name = vlm_model_name
         self.vlm_api_key = vlm_api_key
         self.pipeline_options = VlmPipelineOptions(enable_remote_services=True,
-                                                   do_picture_classification=True,
-                                                   generate_page_images=True,
+                                                   artifacts_path=settings.ARTIFACTS_PATH,
+                                                   generate_page_images=False,
+                                                   do_picture_classification=False,
                                                    do_picture_description=False
+                                                
                                                    )
         self.artifacts_path = settings.ARTIFACTS_PATH
         self.converter = DocumentConverter()
@@ -70,20 +75,28 @@ class ImageParser(ParserABC):
                         ).model_dump()
 
         options = ApiVlmOptions(
-                    url=f"http://{self.vlm_base_url}/v1/chat/completions",
+                    url=f"{self.vlm_base_url}/v1/chat/completions",
                     params=api_vlm_params,
                     headers=headers,
                     prompt=prompt,
-                    timeout=25,
-                    scale=2,
+                    timeout=settings.VLM_TIMEOUT_SECS,
+                    scale=1,
                     temperature=temperature,
                     response_format=format,
+                    concurrency=3
                 )
         return options
 
     def _get_prompt(self):
         prompt = """
-            Convert to Markdown.
+            Проанализируй изображение и выполни следующие действия:
+                1. Распознай весь текст, присутствующий на изображении
+                2. Не давай никаких описаний, комментариев или дополнительной информации
+                3. Преобразуй распознанный текст в корректный Markdown формат, сохраняя:
+                - Структуру текста (заголовки, абзацы, списки)
+                - Таблицы с соответствующим Markdown-синтаксисом
+                - Код или специальные блоки, если они присутствуют
+                4. Выведи только результат в формате Markdown
                  """
         return prompt
     
@@ -91,13 +104,13 @@ class ImageParser(ParserABC):
         logger.debug("Setting VLM Options...")
         prompt = self._get_prompt()
         self.pipeline_options.vlm_options = self._openai_compatible_vlm_options(
-                                                prompt=prompt, format=ResponseFormat.MARKDOWN
+                                                prompt=prompt, format=ResponseFormat.MARKDOWN, max_tokens=settings.VLM_MAX_TOKENS
                                             )
         self.converter = DocumentConverter(
                             format_options={
                                 InputFormat.IMAGE: ImageFormatOption(
                                     pipeline_options=self.pipeline_options,
-                                   backend=ImageDocumentBackend,
+                                    backend=ImageDocumentBackend,
                                     pipeline_cls=VlmPipeline
                                 )
                             }
@@ -108,22 +121,38 @@ class ImageParser(ParserABC):
         self._set_converter_options()
         try:
             self.source_file = self.convert_image_to_bytes_io(self.source_file)
-            doc = self.converter.convert(self.source_file).document
+            doc = self.converter.convert(self.source_file, raises_on_error=True)
+            converted = doc.document
+            markdown = converted.export_to_markdown()
+
+            if not markdown.strip():
+                logger.error("VLM failed silently: returned empty markdown")
+                raise ServiceUnavailable("VLM", self.vlm_base_url)
             logger.success("Document have been parsed!")
             match mode:
                 case ParserMods.TO_FILE:
                     logger.debug("Saving to .md file")
                     with NamedTemporaryFile(suffix=".md", delete=False) as tmp_file:
-                        doc.save_as_markdown(filename=tmp_file.name,artifacts_dir=self.artifacts_path)
+                        converted.save_as_markdown(filename=tmp_file.name,artifacts_dir=self.artifacts_path)
                         logger.success("File Saved!")
                         return tmp_file.name
                 case ParserMods.TO_TEXT:
-                    markdown = doc.export_to_markdown()
+                    markdown = converted.export_to_markdown()
                     return markdown
+                case ParserMods.TO_WORD:
+                    markdown = converted.export_to_markdown()
+                    with NamedTemporaryFile(suffix=".docx", delete=False) as tmp_file:
+                        pypandoc.convert_text(markdown, "docx", "md", outputfile=tmp_file.name)
+                        return tmp_file.name
+                case ParserMods.TO_DOCLING:
+                    return converted
                 case _:
                     logger.error("Unknown parse mode!")
                     raise ValueError
         except requests.exceptions.ConnectionError as e:
+            logger.error(f"VLM is not available: {e}")
+            raise ServiceUnavailable("VLM", settings.VLM_BASE_URL)
+        except exceptions.NewConnectionError as e:
             logger.error(f"VLM is not available: {e}")
             raise ServiceUnavailable("VLM", settings.VLM_BASE_URL)
         except requests.exceptions.HTTPError as e:

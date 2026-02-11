@@ -9,3 +9,11 @@ class InvalidLanguageCode(HTTPException):
             status_code=status, 
             detail=detail,
         )
+        
+class LanguageNotSupported(HTTPException):
+    def __init__(self, status=status.HTTP_422_UNPROCESSABLE_ENTITY, detail = None, headers = None):
+        logger.error("Invalid Autodetected language")
+        super().__init__(
+            status_code=status, 
+            detail=detail,
+        )
