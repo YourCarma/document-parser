@@ -4,7 +4,7 @@ import shutil
 import tempfile
 
 import pypandoc
-
+from tqdm.asyncio import tqdm
 from loguru import logger
 
 from modules.translator.v1.abc.abc import AbstractTranslator
@@ -50,7 +50,6 @@ class CustomModelTranslator(AbstractTranslator):
     async def translate_element(self, text: str) -> str:
         translate_body = self.create_translator_service_body(text).model_dump()
         translated: dict = (await post_request(settings.TRANSALTOR_TRANSLATE_URL, translate_body)).get("text")
-        logger.success(f"Translation completed: {translated}")
         return translated
 
 
@@ -72,17 +71,18 @@ class CustomModelTranslator(AbstractTranslator):
                 self.source_language = detected
                 logger.info(f"Detected language: {self.source_language}")
         
-        logger.debug("Translating elements...")
+        
         text_item_translation_tasks = []
         text_elements = []
 
         cell_item_transaltion_tasks = []
         cell_items = []
         
+        logger.debug("Translating elements...")
         for element, _level in docling_data.iterate_items():
             if isinstance(element, TextItem):
                 element.orig = element.text
-                logger.debug(element.orig)
+            
                 text_item_translation_tasks.append(self.translate_element_limited(element.text))
                 text_elements.append(element)
 
@@ -94,14 +94,14 @@ class CustomModelTranslator(AbstractTranslator):
 
         if text_item_translation_tasks:
             logger.debug("Translating text items")
-            translated_texts: list[str] = await asyncio.gather(*text_item_translation_tasks)
+            translated_texts: list[str] = await tqdm.gather(*text_item_translation_tasks, desc="Transalted text blocks", colour="green")
             for element, translated_text in zip(text_elements, translated_texts):
                 translated_text = translated_text.replace('`', "*")
                 element.text = translated_text
 
         if cell_item_transaltion_tasks:
             logger.debug("Translating cells in tables")
-            translated_cells = await asyncio.gather(*cell_item_transaltion_tasks)
+            translated_cells = await tqdm.gather(*cell_item_transaltion_tasks, desc="Translated tablecells", colour="red")
             for cell, translated_text in zip(cell_items, translated_cells):
                 translated_text = translated_text.replace('`', "*")
                 cell.text = translated_text
@@ -125,6 +125,7 @@ class CustomModelTranslator(AbstractTranslator):
                 return markdown
             
             case ParserMods.TO_WORD:
+                logger.debug("Saving to Word")
                 artifacts_dir = Path(tempfile.mkdtemp(prefix="artifacts_"))
                 doc_with_refs = docling_data._make_copy_with_refmode(
                                         reference_path=artifacts_dir,
