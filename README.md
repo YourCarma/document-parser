@@ -13,8 +13,8 @@ Figure 1. Context schema of service
 | **Images** | **Documents** | **Presentation** | **XLSX** | **PDF** | **TXT** |
 |:----------:|:-------------:|:----------------:|:--------:|:-------:|:-------:|
 |    .png    |     .docx     |       .pptx      |   .xlsx  |   .pdf  | .txt    |
-|    .jpeg   |               |                  |          |         |         |
-|    .jpg    |               |                  |          |         |         |
+|    .jpeg   |     .odt      |       .odp       |   .ods   |         |         |
+|    .jpg    |     .doc      |                  |          |         |         |
 |    .bmp    |               |                 	|          |         |         |
 |    .tiff   |               |                  |          |         |         |
 |    .webp   |               |                  |          |         |         |
