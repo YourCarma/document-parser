@@ -44,6 +44,7 @@ class PDFParser(ParserABC):
                 })
         
     def parse(self, mode: ParserMods):
+        logger.debug(f"Using device: {self.pipeline_options.accelerator_options.device}")
         logger.debug(f"Parsing {self.source_file}...")
         self.set_converter_options()
         doc = self.converter.convert(self.source_file).document

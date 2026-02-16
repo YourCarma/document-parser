@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Document Parser",
               lifespan=lifespan,
               description=""" """,
-              version="0.3.1-without-wh")
+              version="0.10.0-without-wh")
 
 
 
