@@ -21,6 +21,7 @@ from modules.parser.v1.abc.abc import ParserABC
 
 
 class DocParser(ParserABC):
+
     def __init__(self, parser_params: ParserParams):
         super().__init__(parser_params)
         self.converter = DocumentConverter()

@@ -41,6 +41,7 @@ app.add_middleware(
     
 for router in routers:
     app.include_router(router)
+    
 @app.get('/', tags=['System'], response_class=HTMLResponse)
 async def get_root():
     return """
