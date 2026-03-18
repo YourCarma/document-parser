@@ -49,7 +49,7 @@ class CustomModelTranslator(AbstractTranslator):
     retry(3, TimeoutError)
     async def translate_element(self, text: str) -> str:
         translate_body = self.create_translator_service_body(text).model_dump()
-        translated: dict = (await post_request(settings.TRANSALTOR_TRANSLATE_URL, translate_body)).get("text")
+        translated: dict = (await post_request(settings.TRANSLATOR_TRANSLATE_URL, translate_body)).get("text")
         return translated
 
 

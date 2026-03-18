@@ -17,7 +17,7 @@ from api.routers import routers
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.warning("Starting service...")
-    app.state.executor = ProcessPoolExecutor(max_workers=2)
+    app.state.executor = ProcessPoolExecutor(max_workers=settings.PARSER_WORKERS)
     yield
     logger.warning("Closing service...")
     app.state.executor.shutdown()

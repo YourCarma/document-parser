@@ -2,6 +2,7 @@ from typing import List
 from pathlib import Path
 from dotenv import load_dotenv
 import os
+import multiprocessing
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -14,6 +15,7 @@ class Settings(BaseSettings):
     HOST: str
     PORT: int
     ML_DIR: str = str(Path(__file__).parent.parent / "ml")
+    PARSER_WORKERS: int = multiprocessing.cpu_count()
 
     VLM_BASE_URL: str = "localhost:8097"
     VLM_MODEL_NAME: str = "Qwen2.5-VL-7B-Instruct-Q6_K"
@@ -50,7 +52,7 @@ class Settings(BaseSettings):
     ]
 
     @property
-    def TRANSALTOR_TRANSLATE_URL(cls):
+    def TRANSLATOR_TRANSLATE_URL(cls):
         return f"{cls.TRANSLATOR_ADDRESS}{cls.TRANSLATE_URI}"
     
     @property
