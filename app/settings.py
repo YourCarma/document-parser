@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     DETECT_LANGUAGE_URL: str = "http://localhost:10015/api/v1/detect_language"
     TRANSALTOR_MAX_CONCURRENCY: int = 15
 
+    WEBHOOK_MANAGER_URL: str = "http://localhost:8010"
+    WATCHTOWER_URL: str = "http://localhost:8020"
+    WATCHTOWER_SHARED_HOST: str = "http://localhost:8020"
+    RESOURCE_MANAGER_URL: str = "http://localhost:8030"
+
     
     
     ALLOWED_MIME_TYPES: List[str] = [
