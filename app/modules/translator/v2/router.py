@@ -5,13 +5,13 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, 
 from loguru import logger
 
 from modules.parser.v1.schemas import FileFormats, ParserParams
+from modules.parser.v1.utils import save_file
 from modules.resource_manager.service import ResourceManagerService
 from modules.translator.v1.schemas import TranslatorRequest
 from modules.translator.v2.schemas import TranslatorResponseData, TranslatorV2Response
 from modules.translator.v2.service import TranslatorV2Service
 from modules.watchtower.service import WatchtowerService
 from modules.webhook_manager.service import WebhookManagerService
-from modules.parser.v1.utils import save_file
 from settings import settings
 
 router = APIRouter(prefix="/api/v2/parser")
@@ -19,18 +19,18 @@ router = APIRouter(prefix="/api/v2/parser")
 
 @router.post(
     path="/translator/file/word",
-    name="[V2] Translate file to WORD (async)",
-    summary="Async translation: returns task_id immediately",
+    name="[V2] Асинхронный перевод документа в Word",
+    summary="Создать async-задачу перевода и сразу вернуть `task_id`",
     description=f"""
-## Асинхронный перевод файла в WORD (V2)
+## Назначение
 
-Принимает файл, немедленно создаёт задачу в **webhook_manager** и возвращает `task_id`.
-Перевод, загрузка оригинала и результата в облако происходят в фоне.
+Принимает файл, создаёт задачу в `webhook_manager` и сразу возвращает
+`task_id` и `key`. Парсинг, перевод и загрузка файлов выполняются в фоне.
 
 ### Заголовки
-- `X-User-ID` **(обязательный)** — идентификатор пользователя
+- `X-User-ID` **(обязательный)** — идентификатор пользователя.
 
-### Поддерживаемые форматы:
+### Поддерживаемые форматы
 * **DOC**: `{FileFormats.DOC.value}`
 * **PDF**: `{FileFormats.PDF.value}`
 * **XLSX**: `{FileFormats.XLSX.value}`
@@ -40,7 +40,7 @@ router = APIRouter(prefix="/api/v2/parser")
 * **TXT**: `{FileFormats.TXT.value}`
 
 ### Прогресс задачи
-Отслеживается через **webhook_manager** по ключу `user_id:document-parser:task_id`.
+Прогресс отслеживается через `webhook_manager` по ключу `user_id:service:task_id`.
 
 `response_data` содержит JSON:
 ```json
@@ -52,24 +52,35 @@ router = APIRouter(prefix="/api/v2/parser")
   "text_status": "Перевожу... 45/120 элементов"
 }}
 ```
-    """,
+
+### Этапы async-задачи
+- создание задачи;
+- получение bucket пользователя;
+- upload оригинального файла;
+- парсинг документа;
+- перевод элементов;
+- upload переведённого файла;
+- публикация статуса `READY`.
+""",
     tags=["Translator V2"],
     response_model=TranslatorV2Response,
 )
 async def translate_file_to_word_v2(
     request: Request,
     background_tasks: BackgroundTasks,
-    x_user_id: str = Header(..., alias="X-User-ID", description="ID пользователя"),
+    x_user_id: str = Header(
+        ...,
+        alias="X-User-ID",
+        description="Идентификатор пользователя, от имени которого создаётся задача.",
+    ),
     translator_data: TranslatorRequest = Depends(),
 ) -> TranslatorV2Response:
     task_id = str(uuid4())
 
-    # Instantiate services
     webhook = WebhookManagerService(settings.WEBHOOK_MANAGER_URL)
     watchtower = WatchtowerService(settings.WATCHTOWER_URL)
     resource_manager = ResourceManagerService(settings.RESOURCE_MANAGER_URL)
 
-    # Build initial response_data and create task in webhook_manager BEFORE returning
     initial_response_data = TranslatorResponseData(
         original_language=translator_data.source_language,
         target_language=translator_data.target_language,
@@ -88,7 +99,6 @@ async def translate_file_to_word_v2(
             detail="Сервис менеджера задач недоступен. Попробуйте позже.",
         )
 
-    # Save uploaded file; path is passed to background task
     file_path = await save_file(translator_data.file)
     original_filename = translator_data.file.filename
 
@@ -118,5 +128,9 @@ async def translate_file_to_word_v2(
         executor=request.app.state.executor,
     )
 
-    logger.info(f"Translation task {task_id} queued for user {x_user_id}")
+    logger.info(
+        "TranslatorV2: задача поставлена в очередь task_id='{}' user_id='{}'",
+        task_id,
+        x_user_id,
+    )
     return TranslatorV2Response(task_id=task_id, key=task_key)

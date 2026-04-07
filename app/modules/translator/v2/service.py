@@ -36,6 +36,7 @@ def _stage_to_user_message(stage: str) -> str:
 
 
 class TranslatorV2Service:
+
     def __init__(
         self,
         webhook: WebhookManagerService,
@@ -45,10 +46,6 @@ class TranslatorV2Service:
         self.webhook = webhook
         self.watchtower = watchtower
         self.resource_manager = resource_manager
-
-    # ------------------------------------------------------------------
-    # Public entry point — runs as a BackgroundTask
-    # ------------------------------------------------------------------
 
     async def run_translation_task(
         self,
@@ -71,7 +68,6 @@ class TranslatorV2Service:
 
         current_stage = "инициализация"
         try:
-            # 1. Resolve user bucket
             current_stage = "получение бакета пользователя"
             bucket = await self.resource_manager.get_user_bucket(user_id)
             if not bucket:
@@ -79,8 +75,15 @@ class TranslatorV2Service:
                     f"Resource Manager не вернул бакет для пользователя '{user_id}'. "
                     "Убедитесь, что у пользователя есть ресурс типа Document."
                 )
+            logger.info(
+                "TranslatorV2: старт задачи task_id='{}' user_id='{}' bucket='{}' source='{}' target='{}'",
+                task_id,
+                user_id,
+                bucket,
+                source_language,
+                target_language,
+            )
 
-            # 3. Upload original file
             current_stage = "загрузка оригинального файла"
             await self._update(
                 task_key, response_data, 5, TaskStatus.PROCESSING,
@@ -96,8 +99,13 @@ class TranslatorV2Service:
                 "Оригинал загружен. Парсинг документа...",
             )
 
-            # 4. Parse document (CPU-bound → process pool)
             current_stage = "парсинг документа"
+            logger.debug(
+                "TranslatorV2: этап='{}' task_id='{}' filename='{}'",
+                current_stage,
+                task_id,
+                original_filename,
+            )
             parser = ParserFactory(parser_params).get_parser()
             docling_doc: DoclingDocument = await run_in_process(
                 parser.parse, executor, ParserMods.TO_DOCLING
@@ -107,7 +115,6 @@ class TranslatorV2Service:
                 "Начинаю перевод...",
             )
 
-            # 5. Translate with per-element progress reporting
             current_stage = "перевод документа"
             translator = CustomModelTranslator(
                 source=Path(file_path),
@@ -120,7 +127,6 @@ class TranslatorV2Service:
                 translator, docling_doc, task_key, response_data
             )
 
-            # 6. Upload translated file
             current_stage = "загрузка переведённого файла"
             await self._update(
                 task_key, response_data, 95, TaskStatus.PROCESSING,
@@ -134,15 +140,18 @@ class TranslatorV2Service:
             translated_link = await self.watchtower.get_sharelink(bucket, translated_key)
             response_data.translated_file = translated_link
 
-            # 7. Mark READY
             await self._update(
                 task_key, response_data, 100, TaskStatus.READY, "Готово"
             )
-            logger.success(f"Task {task_id} completed")
+            logger.success("TranslatorV2: задача успешно завершена task_id='{}'", task_id)
 
         except Exception as exc:
             logger.error(
-                f"Task {task_id} failed at stage '{current_stage}': {exc}"
+                "TranslatorV2: задача завершилась ошибкой task_id='{}' user_id='{}' stage='{}' error='{}'",
+                task_id,
+                user_id,
+                current_stage,
+                exc,
             )
             response_data.error = str(exc)
             await self._update(
@@ -157,10 +166,6 @@ class TranslatorV2Service:
                 except Exception:
                     pass
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
     async def _update(
         self,
         key: str,
@@ -169,12 +174,17 @@ class TranslatorV2Service:
         status: TaskStatus,
         text_status: str,
     ):
-        """Update progress then response_data sequentially to avoid read-modify-write race."""
         response_data.text_status = text_status
-        logger.info(f"[{key}] _update → progress={progress} status={status} | {text_status}")
+        logger.info(
+            "TranslatorV2: обновление статуса key='{}' progress={} status='{}' text_status='{}'",
+            key,
+            progress,
+            status,
+            text_status,
+        )
         await self.webhook.update_progress(key, progress, status)
         await self.webhook.update_response_data(key, response_data.model_dump())
-        logger.debug(f"[{key}] _update done")
+        logger.debug("TranslatorV2: статус обновлён key='{}'", key)
 
     async def _translate_with_progress(
         self,
@@ -183,12 +193,6 @@ class TranslatorV2Service:
         task_key: str,
         response_data: TranslatorResponseData,
     ) -> str:
-        """
-        Translate all text/table elements in docling_doc.
-        Fires fire-and-forget webhook updates every ~5% of elements.
-        Returns path to a temporary .docx file.
-        """
-        # --- Language auto-detection ---
         if translator.source_language == "auto":
             sample_texts = []
             for element, _ in docling_doc.iterate_items():
@@ -208,9 +212,12 @@ class TranslatorV2Service:
                     )
                 translator.source_language = detected
                 response_data.original_language = detected
-                logger.info(f"Detected language: {detected}")
+                logger.info(
+                    "TranslatorV2: язык определён автоматически key='{}' language='{}'",
+                    task_key,
+                    detected,
+                )
 
-        # --- Collect elements ---
         text_elements: list[TextItem] = []
         cell_items = []
         for element, _ in docling_doc.iterate_items():
@@ -225,9 +232,8 @@ class TranslatorV2Service:
         if total == 0:
             return await self._export_to_word(translator, docling_doc)
 
-        # --- Progress state ---
         completed = [0]
-        update_every = max(1, total // 20)  # report roughly every 5%
+        update_every = max(1, total // 20)
         progress_tasks: list[asyncio.Task] = []
 
         async def translate_tracked(text: str) -> str:
@@ -237,7 +243,13 @@ class TranslatorV2Service:
             if n % update_every == 0 or n == total:
                 progress = 15 + 78 * (n / total)  # 15 → 93
                 status_text = f"Перевожу... {n}/{total} элементов"
-                logger.debug(f"[{task_key}] progress={progress:.1f} ({n}/{total})")
+                logger.debug(
+                    "TranslatorV2: прогресс перевода key='{}' progress={:.1f} translated={}/{}",
+                    task_key,
+                    progress,
+                    n,
+                    total,
+                )
                 snapshot = {**response_data.model_dump(), "text_status": status_text}
                 async def _send(p=progress, s=snapshot):
                     await self.webhook.update_progress(task_key, p, TaskStatus.PROCESSING)
@@ -246,7 +258,6 @@ class TranslatorV2Service:
                 progress_tasks.append(asyncio.create_task(_send()))
             return result
 
-        # --- Translate text items ---
         if text_elements:
             results = await asyncio.gather(
                 *[translate_tracked(el.text) for el in text_elements]
@@ -254,7 +265,6 @@ class TranslatorV2Service:
             for el, translated in zip(text_elements, results):
                 el.text = translated.replace("`", "*")
 
-        # --- Translate table cells ---
         if cell_items:
             results = await asyncio.gather(
                 *[translate_tracked(cell.text) for cell in cell_items]
@@ -262,12 +272,14 @@ class TranslatorV2Service:
             for cell, translated in zip(cell_items, results):
                 cell.text = translated.replace("`", "*")
 
-        # Дожидаемся всех progress-обновлений прежде чем вернуть управление,
-        # иначе они могут выполниться уже после финального READY
         if progress_tasks:
-            logger.debug(f"[{task_key}] Awaiting {len(progress_tasks)} pending progress tasks...")
+            logger.debug(
+                "TranslatorV2: ожидание отложенных обновлений key='{}' pending={}",
+                task_key,
+                len(progress_tasks),
+            )
             await asyncio.gather(*progress_tasks, return_exceptions=True)
-            logger.debug(f"[{task_key}] All progress tasks done")
+            logger.debug("TranslatorV2: все отложенные обновления завершены key='{}'", task_key)
 
         return await self._export_to_word(translator, docling_doc)
 
@@ -276,7 +288,7 @@ class TranslatorV2Service:
         translator: CustomModelTranslator,
         docling_doc: DoclingDocument,
     ) -> str:
-        """Export translated DoclingDocument to a temporary .docx file."""
+        """Экспортировать переведённый `DoclingDocument` во временный `.docx`."""
         artifacts_dir = Path(tempfile.mkdtemp(prefix="artifacts_"))
         try:
             doc_with_refs = docling_doc._make_copy_with_refmode(

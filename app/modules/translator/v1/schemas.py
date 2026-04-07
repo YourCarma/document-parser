@@ -13,12 +13,30 @@ from modules.translator.v1.exceptions import InvalidLanguageCode
 
 
 class TranslatorRequest(BaseModel):
-    file: UploadFile = File(description="Файл для парсинга")
-    parse_images: Optional[bool]  = Field(description="Необходимо распознавать вложенные изображения (Необходимо наличие VLM)", default=False)
-    include_image_in_output: Optional[bool] = Field(description="Вшивать изображения в текст вида `base64`", default=False)
-    full_vlm_pdf_parse: Optional[bool] = Field(description="Полный парсинг .pdf с помощью VLM (может занять куда больше времени)", default=False)
-    source_language: Optional[str] = Field(description="Исходынй язык перевода", default="en")
-    target_language: Optional[str] = Field(description="Целевой язык перевода", default="ru")
+    file: UploadFile = File(description="Файл, который нужно перевести.")
+    parse_images: Optional[bool] = Field(
+        description="Распознавать встроенные изображения через VLM перед переводом.",
+        default=False,
+    )
+    include_image_in_output: Optional[bool] = Field(
+        description="Встраивать изображения документа в промежуточный Markdown.",
+        default=False,
+    )
+    full_vlm_pdf_parse: Optional[bool] = Field(
+        description="Обрабатывать PDF целиком через VLM. Полезно для сложных PDF.",
+        default=False,
+    )
+    source_language: Optional[str] = Field(
+        description=(
+            "Исходный язык документа в формате ISO 639-1. Можно передать `auto`, "
+            "тогда язык будет определён автоматически."
+        ),
+        default="en",
+    )
+    target_language: Optional[str] = Field(
+        description="Целевой язык перевода в формате ISO 639-1.",
+        default="ru",
+    )
 
     @field_validator('source_language', 'target_language', mode="after")
     def convert_to_iso639(cls, lang: str) -> str:
@@ -42,20 +60,26 @@ class TranslatorRequest(BaseModel):
     @field_validator("file", mode="after")  
     @classmethod
     def is_allowed_mime_typy(cls, file: UploadFile) -> UploadFile:
-        logger.debug(f"Getting file: {file.filename}")
-        logger.debug(f"MIME type: {file.content_type}")
-        logger.debug(f"File Size: {file.size}")
+        logger.debug(
+            "Проверка входного файла переводчика: filename='{}' mime='{}' size={}",
+            file.filename,
+            file.content_type,
+            file.size,
+        )
         if file.content_type not in settings.ALLOWED_MIME_TYPES:
             file_extension = file.filename.split(".")[-1]
             raise ContentNotSupportedError(f"Данный формат файла \"{file_extension}\" не поддерживается")
-        logger.success("File MIME type supported!")
+        logger.debug("MIME type поддерживается: filename='{}'", file.filename)
         return file
 
 class TranslatorTextResponse(BaseModel):
-    parsed_text: str = Field(description="Распознанный текст в формате markdown", examples=["## Heading"])
+    parsed_text: str = Field(
+        description="Переведённый текст документа в формате Markdown.",
+        examples=["## Заголовок\n\nПереведённый текст документа"],
+    )
 
 
 class CustomTranslatorBody(BaseModel):
-    text: str = Field(description="Original text")
-    source_language: str = Field(description="Source language")
-    target_language: str = Field(description="Target language")
+    text: str = Field(description="Исходный текст для перевода.")
+    source_language: str = Field(description="Код исходного языка.")
+    target_language: str = Field(description="Код целевого языка.")

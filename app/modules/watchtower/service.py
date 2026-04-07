@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import aiohttp
 from loguru import logger
 
@@ -7,11 +5,13 @@ from settings import settings
 
 
 class WatchtowerService:
+    """Клиент для загрузки файлов и получения share-ссылок в watchtower."""
+
     def __init__(self, base_url: str):
         self.base_url = base_url
 
     async def create_folder(self, bucket: str, prefix: str):
-        """Create folder placeholder in bucket. Ignores 4xx (folder may already exist)."""
+        """Создать placeholder-папку в bucket, если backend этого требует."""
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{self.base_url}/api/v1/cloud/{bucket}/folder",
@@ -23,10 +23,15 @@ class WatchtowerService:
                         f"Watchtower create_folder [{resp.status}] "
                         f"bucket='{bucket}' prefix='{prefix}': {body}"
                     )
-                logger.debug(f"Folder ensured: {bucket}/{prefix} [{resp.status}]")
+                logger.debug(
+                    "Watchtower: папка подготовлена bucket='{}' prefix='{}' status={}",
+                    bucket,
+                    prefix,
+                    resp.status,
+                )
 
     async def upload_file(self, bucket: str, local_path: str, filename: str) -> str:
-        """Upload local file to bucket. Returns filename."""
+        """Загрузить локальный файл в bucket и вернуть object key."""
         async with aiohttp.ClientSession() as session:
             with open(local_path, "rb") as f:
                 form = aiohttp.FormData()
@@ -46,7 +51,11 @@ class WatchtowerService:
                             f"Watchtower upload_file [{resp.status}] "
                             f"bucket='{bucket}' file='{filename}': {body}"
                         )
-                    logger.info(f"Uploaded '{filename}' → bucket '{bucket}'")
+                    logger.info(
+                        "Watchtower: файл загружен bucket='{}' filename='{}'",
+                        bucket,
+                        filename,
+                    )
         return filename
 
     async def get_sharelink(
@@ -55,7 +64,7 @@ class WatchtowerService:
         file_path: str,
         expired_secs: int = 3600 * 24 * 7,
     ) -> str:
-        """Get pre-signed share URL for a file. Returns URL string."""
+        """Получить pre-signed share-ссылку для файла в bucket."""
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{self.base_url}/api/v1/cloud/{bucket}/file/share",
@@ -66,16 +75,20 @@ class WatchtowerService:
                     raise Exception(
                         f"Watchtower get_sharelink [{resp.status}] "
                         f"bucket='{bucket}' file='{file_path}': {body}"
-                    )
+                )
                 data = await resp.json()
                 url = data.get("message", "")
                 url = self._apply_shared_host(url)
-                logger.info(f"Sharelink for '{file_path}': {url}")
+                logger.info(
+                    "Watchtower: получена share-ссылка bucket='{}' file_path='{}'",
+                    bucket,
+                    file_path,
+                )
                 return url
 
     @staticmethod
     def _apply_shared_host(url: str) -> str:
-        """Prepend WATCHTOWER_SHARED_HOST to the sharelink path."""
+        """Заменить внутренний host на публичный shared host, если он задан."""
         if not url or not settings.WATCHTOWER_SHARED_HOST:
             return url
         host = settings.WATCHTOWER_SHARED_HOST.rstrip("/")

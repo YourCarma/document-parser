@@ -5,6 +5,8 @@ from pydantic import BaseModel
 
 
 class ResourceSchema(BaseModel):
+    """Ресурс пользователя, полученный из resource_manager."""
+
     id: str
     name: str
     created_at: datetime

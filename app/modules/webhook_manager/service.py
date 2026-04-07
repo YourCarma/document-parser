@@ -12,6 +12,8 @@ from settings import settings
 
 
 class WebhookManagerService:
+    """Клиент webhook_manager для создания и обновления async-задач."""
+
     def __init__(self, base_url: str):
         self.base_url = base_url
 
@@ -19,6 +21,7 @@ class WebhookManagerService:
         return f"{user_id}:{settings.SERVICE_NAME}:{task_id}"
 
     async def create_task(self, user_id: str, task_id: str, response_data: dict) -> str:
+        """Создать запись о задаче и вернуть её составной ключ."""
         key = self._make_key(user_id, task_id)
         now = datetime.now(timezone.utc)
         task = Task(
@@ -42,10 +45,11 @@ class WebhookManagerService:
                         f"WebhookManager create_task вернул [{resp.status}] "
                         f"для key='{key}': {body}"
                     )
-                logger.info(f"Task created: {key}")
+                logger.info("WebhookManager: задача создана key='{}'", key)
         return key
 
     async def update_progress(self, key: str, progress: float, status: TaskStatus):
+        """Обновить progress/status асинхронной задачи."""
         payload = ProgressUpdate(
             key=key,
             progress=TaskProgress(progress=progress, status=status),
@@ -63,6 +67,7 @@ class WebhookManagerService:
                     )
 
     async def update_response_data(self, key: str, response_data: dict):
+        """Обновить `response_data` задачи для UI и операторской диагностики."""
         payload = ResponseDataUpdate(
             key=key,
             response_data=json.dumps(response_data, ensure_ascii=False),
