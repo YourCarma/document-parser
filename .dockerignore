@@ -2,3 +2,4 @@ documents/
 ml/
 test_data
 docs
+__pycache__

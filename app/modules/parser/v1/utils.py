@@ -62,26 +62,65 @@ async def run_in_process(fn, app_executor, *args):
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(app_executor, fn, *args)
 
-def convert_doc_to(input_file_path: Union[Path| str], output_format: ConvertationOutputs, output_dir: Optional[Union[Path| str]] = None):
-    logger.debug(f"Covertation to {input_file_path} в {output_format}")
-    if not output_dir:
-        output_dir = os.path.dirname(input_file_path)
+def convert_doc_to(
+    input_file_path: Union[Path, str],
+    output_format: str,
+    output_dir: Optional[Union[Path, str]] = None,
+) -> Path:
+    input_path = Path(input_file_path).resolve()
+
+    if not input_path.exists():
+        raise FileNotFoundError(f"Input file not found: {input_path}")
+
+    if output_dir is None:
+        outdir = input_path.parent
+    else:
+        outdir = Path(output_dir).resolve()
+        outdir.mkdir(parents=True, exist_ok=True)
+
+    format_filters = {
+        "docx": "MS Word 2007 XML",
+        "xlsx": "Calc MS Excel 2007 XML",
+        "pptx": "Impress MS PowerPoint 2007 XML",
+    }
+
+    filter_name = format_filters.get(output_format.lower())
+    if not filter_name:
+        raise ValueError(f"Unsupported output format: {output_format}")
 
     cmd = [
-         'libreoffice',
-    '--headless',
-    '--nologo',
-    '--nofirststartwizard',
-    '--convert-to', f'{output_format}:writer8',
-    '--outdir', output_dir,
-    input_file_path
+        "soffice",
+        "--headless",
+        "--nologo",
+        "--nofirststartwizard",
+        "--convert-to",
+        f"{output_format}:{filter_name}",
+        "--outdir",
+        str(outdir),
+        str(input_path),
     ]
-    try:
-        subprocess.run(cmd, check=True, capture_output=True)
-        base_name = os.path.splitext(os.path.basename(input_file_path))[0]
-        output_path = os.path.join(output_dir, f"{base_name}.{output_format}")
-        logger.success(f"Document convertion sucsessful!. File path: {output_path}")
-        return output_path
-    except subprocess.CalledProcessError as e:
-        logger.warning(f"Error converting dpcument: {e.stderr.decode()}. Returning original file")
-        return input_file_path
+
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Conversion failed.\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+    output_path = outdir / f"{input_path.stem}.{output_format}"
+
+    if not output_path.exists():
+        raise RuntimeError(
+            f"LibreOffice finished without an error code, but output file was not created: {output_path}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+
+    return output_path

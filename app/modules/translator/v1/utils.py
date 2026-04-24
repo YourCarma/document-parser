@@ -6,12 +6,13 @@ from fastapi import HTTPException, Response
 import aiohttp
 from loguru import logger
 import asyncio
+from settings import settings
 
 
 async def post_request(url: str, payload: dict) -> Response:
     async with aiohttp.ClientSession() as session:
             try:
-                async with session.post(url, json=payload, timeout=100) as resp:
+                async with session.post(url, json=payload, timeout=settings.POST_REQUEST_TIMEOUT) as resp:
                     response_body = await resp.read()
                     
                     if resp.status >= 400:

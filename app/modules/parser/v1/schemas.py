@@ -63,7 +63,7 @@ class DocLingAPIVLMOptionsParams(BaseModel):
 class FileFormats(list[str], enum.Enum):
     IMAGE = [".jpg", ".jpeg", ".png", ".tiff", ".bmp", ".webp"]
     PDF = [".pdf"]
-    DOC = [".docx", ".odt", ".doc"]
+    DOC = [".docx", ".odt", ".doc", '.rtf']
     PPTX = [".pptx", ".odp"]
     XLSX = [".xlsx", ".ods"]
     HTML = [".html"]
