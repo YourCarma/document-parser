@@ -1,6 +1,8 @@
 # Document Parser
 
-Сервис преобразует документы в Markdown и Word, а также умеет переводить содержимое документов через внешние сервисы. В основе парсинга используются `Docling`, `pypandoc`, `LibreOffice` и VLM для OCR по изображениям и сложным PDF.
+> FastAPI + Docling + VLM (Optional) app
+
+## 1. Overview
 
 ![Контекст сервиса](./docs/Context.drawio.png)
 
@@ -13,47 +15,52 @@
 
 Поддерживаемые форматы:
 
-| Изображения | Документы | Презентации | Таблицы | PDF | Текст |
-|:-----------:|:---------:|:-----------:|:-------:|:---:|:-----:|
-| `.png` | `.docx` | `.pptx` | `.xlsx` | `.pdf` | `.txt` |
-| `.jpeg` | `.odt` | `.odp` | `.ods` |  |  |
-| `.jpg` | `.doc` |  |  |  |  |
-| `.bmp` |  |  |  |  |  |
-| `.tiff` |  |  |  |  |  |
-| `.webp` |  |  |  |  |  |
+| **Images** | **Documents** | **Presentation** | **XLSX** | **PDF** | **TXT** |
+| :--------------: | :-----------------: | :--------------------: | :------------: | :-----------: | :-----------: |
+|       .png       |        .docx        |         .pptx         |     .xlsx     |     .pdf     |     .txt     |
+|      .jpeg      |                    |                        |                |              |              |
+|       .jpg       |                    |                        |                |              |              |
+|       .bmp       |                    |                        |                |              |              |
+|      .tiff      |                    |                        |                |              |              |
+|      .webp      |                    |                        |                |              |              |
 
 ## Архитектура и поток данных
 
 Сервис состоит из нескольких прикладных модулей:
 
-- `parser v1` принимает файл и превращает его в Markdown, `.md`, `.docx` или `DoclingDocument`.
-- `translator v1` работает синхронно: парсит документ, переводит текст и возвращает результат в том же HTTP-запросе.
-- `translator v2` работает асинхронно: создаёт задачу, публикует прогресс в `webhook_manager`, складывает оригинал и результат в `watchtower` и возвращает `task_id`.
-- `resource_manager` сообщает, в какой пользовательский bucket нужно складывать файлы.
-- `watchtower` отвечает за upload и share-ссылки.
+1. `Python 3.12`
+2. `Docker`
+3. ❗❗❗ Access to `VLM` for Image parsing (**external** or **self-hosted** `VLM`).
+4. `Poetry`
+
+❗❗❗ Download Docling models in root dir `ml` using:
+`docling-tools models download --all -o ml` this will be yours volume of `docker`
 
 Дополнительные схемы и runbooks:
 
-- [Архитектура](./docs/architecture.md)
-- [Интеграции](./docs/integration.md)
-- [Эксплуатация и диагностика](./docs/operations.md)
+* `SERVICE_NAME`- the name of service, e.g. `document-parser`
+* `HOST` - service hosting IP, e.g. `0.0.0.0`
+* `PORT` - service hosting PORT, e.g. `1338`
+* `VLM_BASE_URL` - VLM API URL, e.g. `0.0.0.0:8000`
+* `VLM_MODEL_NAME` - VLM model name, e.g. `Qwen2.5-VL`,
+* `VLM_API_KEY` - API-KEY auth for model, e.g. `no-key-required`
 
 ## Внешние зависимости
 
 Для полноценной работы сервис зависит от внешней инфраструктуры:
 
-- VLM-сервис для OCR по изображениям и full-VLM-парсинга PDF.
-- Текстовый переводчик.
-- Детектор языка.
-- `webhook_manager` для хранения статусов асинхронных задач.
-- `watchtower` для загрузки файлов и выдачи share-ссылок.
-- `resource_manager` для поиска пользовательского bucket.
+1. `poetry shell`
+2. `poetry install --no-root`
+3. `docling-tools models download --all -o ml`
+4. `cd app`
+5. `python main.py`
 
 Без этих сервисов часть сценариев будет недоступна. Например, `translator v2` не сможет завершить задачу без `webhook_manager`, `watchtower` и `resource_manager`.
 
 ## Быстрый старт для разработчика
 
-### Требования
+1. In the root directory command: `docker build -t document-parser:latest .`
+2. Be sure, that you have ml models in dir `ml` as a volume in `docker`
 
 - `Python 3.12`
 - `Poetry`
@@ -62,7 +69,13 @@
 - `pandoc`
 - Доступ к VLM, если нужен OCR по изображениям
 
-### Переменные окружения
+Parser factory consists of **5** parser types, which having own processing algorithms, based on **Docling** and **VLM**:
+
+* `ImageParser`
+* `DocParser`
+* `PPTXParser`
+* `XLSXParser`
+* `PDFParser`
 
 Минимально важные переменные:
 
@@ -78,86 +91,16 @@
 
 Пример запуска по умолчанию использует `.env.dev`. Для production-сценария можно задать `ENV_FILE=/path/to/.env.production`.
 
-### Локальный запуск
+#### 1. Parsing documents
 
-1. Установить зависимости:
-
-```bash
-poetry install
+```rust
+POST /v1/parser/parse?parse_images=false&include_image_in_output=false
 ```
 
-2. Скачать модели Docling в каталог `ml`:
+Query params:
 
-```bash
-docling-tools models download --all -o ml
-```
+1. `parse_images` - parse internal document images with VLM (need access to VLM, may take more time)
+2. `include_image_in_output` - inject internal document images to output `Markdown` as `base64` (may increase output size)
 
-3. Перейти в каталог приложения и запустить сервис:
-
-```bash
-cd app
-poetry run python main.py
-```
-
-4. Открыть Swagger:
-
-```text
-http://{HOST}:{PORT}/docs
-```
-
-## Docker
-
-Сборка образа:
-
-```bash
-docker build -t document-parser:latest .
-```
-
-В репозитории есть `docker-compose.yaml`, но перед использованием его стоит привести к современному формату `services:`. Каталог `ml` ожидается как volume и не должен запекаться в образ.
-
-## Какой API использовать
-
-### `parser v1`
-
-Используйте, когда нужно только распознать документ и сразу получить результат.
-
-- `POST /api/v1/parser/parse/text`
-- `POST /api/v1/parser/parse/file`
-- `POST /api/v1/parser/parse/file/word`
-
-### `translator v1`
-
-Используйте, когда нужен синхронный перевод в одном запросе и размер документа умеренный.
-
-- `POST /api/v1/parser/translator/text`
-- `POST /api/v1/parser/translator/file`
-- `POST /api/v1/parser/translator/file/word`
-
-### `translator v2`
-
-Используйте, когда нужен асинхронный перевод с прогрессом и выгрузкой файлов в облачное хранилище.
-
-- `POST /api/v2/parser/translator/file/word`
-
-Ответ сразу содержит:
-
-- `task_id` — идентификатор задачи.
-- `key` — ключ вида `user_id:service:task_id`.
-
-Дальше прогресс и ссылки на файлы обновляются через `webhook_manager`.
-
-## Типовые проблемы
-
-- Swagger открывается, но OCR не работает: проверьте `VLM_BASE_URL`, `VLM_MODEL_NAME` и доступность VLM.
-- Асинхронная задача создаётся, но зависает: проверьте доступность `webhook_manager`.
-- Файл не загружается после перевода: проверьте `resource_manager`, bucket пользователя и доступность `watchtower`.
-- `full_vlm_pdf_parse` работает медленно: это ожидаемо, потому что весь PDF обрабатывается через VLM.
-- Формат отклоняется на входе: проверьте MIME type, а не только расширение файла.
-
-## Дополнительные материалы
-
-![Парсер](./docs/parser_logic.drawio.png)
-
-![Встраивание изображений](./docs/Include_images.png)
-
-![OCR по изображениям](./docs/parse_images.png)
+ ![Include_Images](/docs/Include_images.png)
+ ![Parse_Images](/docs/parse_images.png)
