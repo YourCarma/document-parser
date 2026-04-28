@@ -1,9 +1,5 @@
 import uvicorn
 from fastapi import FastAPI
-import sentry_sdk
-from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.starlette import StarletteIntegration
-from sentry_sdk.integrations.logging import LoggingIntegration
 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
@@ -14,18 +10,71 @@ from loguru import logger
 from settings import settings
 from api.routers import routers
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.warning("Starting service...")
-    app.state.executor = ProcessPoolExecutor(max_workers=2)
+    """Initialize shared resources for request handling and background tasks."""
+    logger.info("Запуск сервиса document-parser")
+    app.state.executor = ProcessPoolExecutor(max_workers=settings.PARSER_WORKERS)
     yield
-    logger.warning("Closing service...")
+    logger.info("Остановка сервиса document-parser")
     app.state.executor.shutdown()
 
-app = FastAPI(title="Document Parser",
-              lifespan=lifespan,
-              description=""" """,
-              version="0.3.1-without-wh")
+app = FastAPI(
+    title="Document Parser",
+    lifespan=lifespan,
+    version="0.10.0-without-wh",
+    summary=(
+        "Сервис для парсинга документов, OCR по изображениям и перевода "
+        "документов в синхронном и асинхронном режимах."
+    ),
+    description="""
+## Назначение
+
+`document-parser` преобразует документы в Markdown и Word, а также запускает
+перевод содержимого через внешние сервисы.
+
+## Основные сценарии
+
+- `Parser V1` — парсинг документа в текст, `.md` или `.docx`.
+- `Translator V1` — синхронный перевод документа в рамках одного HTTP-запроса.
+- `Translator V2` — асинхронный перевод с `task_id`, прогрессом и загрузкой
+  исходного и итогового файла в облачное хранилище.
+
+## Внешние зависимости
+
+- VLM для OCR и full-VLM-парсинга PDF.
+- Сервис перевода текста.
+- Сервис определения языка.
+- `webhook_manager`, `watchtower`, `resource_manager` для async-сценария.
+""",
+    openapi_tags=[
+        {
+            "name": "System",
+            "description": "Служебные методы для проверки доступности сервиса.",
+        },
+        {
+            "name": "Parser V1",
+            "description": (
+                "Синхронный парсинг документов в Markdown-текст, `.md` и `.docx`."
+            ),
+        },
+        {
+            "name": "Translator V1",
+            "description": (
+                "Синхронный перевод документов. Результат возвращается в ответе "
+                "на тот же запрос."
+            ),
+        },
+        {
+            "name": "Translator V2",
+            "description": (
+                "Асинхронный перевод документов с прогрессом, `task_id` и "
+                "загрузкой файлов в облачное хранилище."
+            ),
+        },
+    ],
+)
 
 
 
@@ -41,6 +90,8 @@ app.add_middleware(
     
 for router in routers:
     app.include_router(router)
+
+
 @app.get('/', tags=['System'], response_class=HTMLResponse)
 async def get_root():
     return """
@@ -58,5 +109,6 @@ if __name__ == "__main__":
         "main:app",
         host=settings.HOST,
         port=settings.PORT,
-        reload=True,
+        reload=True if not settings.PRODUCTION_MODE else False,
+        
     )

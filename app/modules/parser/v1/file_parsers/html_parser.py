@@ -28,7 +28,7 @@ class HTMLParser(ParserABC):
 
     def set_converter_options(self):
         self.converter = DocumentConverter(format_options={
-                InputFormat.XLSX: HTMLFormatOption(pipeline_options=self.pipeline_options)
+                InputFormat.HTML: HTMLFormatOption(pipeline_options=self.pipeline_options)
                 })
         
     def parse(self, mode: ParserMods):

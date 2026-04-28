@@ -4,13 +4,16 @@
 
 ## 1. Overview
 
-Service is designed for parsing documents to single `Markdown` format, using VLM and [Docling framework](https://docling-project.github.io/docling/)
+![Контекст сервиса](./docs/Context.drawio.png)
 
-![Context](./docs/Context.drawio.png)
+## Что умеет сервис
 
-Figure 1. Context schema of service
+- Парсить документы в Markdown-текст.
+- Возвращать результат как `.md` или `.docx`.
+- Переводить документ синхронно через `translator v1`.
+- Запускать асинхронный перевод с прогрессом через `translator v2`.
 
-### Allowed formats
+Поддерживаемые форматы:
 
 | **Images** | **Documents** | **Presentation** | **XLSX** | **PDF** | **TXT** |
 | :--------------: | :-----------------: | :--------------------: | :------------: | :-----------: | :-----------: |
@@ -21,9 +24,9 @@ Figure 1. Context schema of service
 |      .tiff      |                    |                        |                |              |              |
 |      .webp      |                    |                        |                |              |              |
 
-## 2. Installing and launching
+## Архитектура и поток данных
 
-### Requirements:
+Сервис состоит из нескольких прикладных модулей:
 
 1. `Python 3.12`
 2. `Docker`
@@ -33,7 +36,7 @@ Figure 1. Context schema of service
 ❗❗❗ Download Docling models in root dir `ml` using:
 `docling-tools models download --all -o ml` this will be yours volume of `docker`
 
-### Environments
+Дополнительные схемы и runbooks:
 
 * `SERVICE_NAME`- the name of service, e.g. `document-parser`
 * `HOST` - service hosting IP, e.g. `0.0.0.0`
@@ -42,10 +45,9 @@ Figure 1. Context schema of service
 * `VLM_MODEL_NAME` - VLM model name, e.g. `Qwen2.5-VL`,
 * `VLM_API_KEY` - API-KEY auth for model, e.g. `no-key-required`
 
-❗❗❗ Download Docling models in root dir `ml` using:
-`docling-tools models download --all -o ml`
+## Внешние зависимости
 
-### Manual startup
+Для полноценной работы сервис зависит от внешней инфраструктуры:
 
 1. `poetry shell`
 2. `poetry install --no-root`
@@ -53,14 +55,19 @@ Figure 1. Context schema of service
 4. `cd app`
 5. `python main.py`
 
- `Swagger` available on `http://{HOST}:{PORT}/docs`
+Без этих сервисов часть сценариев будет недоступна. Например, `translator v2` не сможет завершить задачу без `webhook_manager`, `watchtower` и `resource_manager`.
 
-### Building with docker
+## Быстрый старт для разработчика
 
 1. In the root directory command: `docker build -t document-parser:latest .`
 2. Be sure, that you have ml models in dir `ml` as a volume in `docker`
 
-## 3. Business-logic
+- `Python 3.12`
+- `Poetry`
+- `Docker`
+- `LibreOffice`
+- `pandoc`
+- Доступ к VLM, если нужен OCR по изображениям
 
 Parser factory consists of **5** parser types, which having own processing algorithms, based on **Docling** and **VLM**:
 
@@ -70,11 +77,19 @@ Parser factory consists of **5** parser types, which having own processing algor
 * `XLSXParser`
 * `PDFParser`
 
-![Parser overview](/docs/parser_logic.drawio.png)
+Минимально важные переменные:
 
-Figure 2. Parser class overview
+- `SERVICE_NAME` — имя сервиса, участвует в ключах задач.
+- `HOST`, `PORT` — адрес и порт FastAPI.
+- `ML_DIR` — каталог локальных моделей Docling.
+- `PARSER_WORKERS` — количество процессов для CPU-bound парсинга.
+- `VLM_BASE_URL`, `VLM_MODEL_NAME`, `VLM_API_KEY`, `VLM_MAX_TOKENS`, `VLM_TIMEOUT_SECS` — настройки VLM.
+- `TRANSLATOR_ADDRESS`, `TRANSLATE_URI` — адрес сервиса перевода.
+- `DETECT_LANGUAGE_URL` — адрес сервиса определения языка.
+- `WEBHOOK_MANAGER_URL`, `WATCHTOWER_URL`, `WATCHTOWER_SHARED_HOST`, `RESOURCE_MANAGER_URL` — интеграционные сервисы.
+- `TRANSALTOR_MAX_CONCURRENCY` — ограничение параллельных запросов к переводчику.
 
-### API
+Пример запуска по умолчанию использует `.env.dev`. Для production-сценария можно задать `ENV_FILE=/path/to/.env.production`.
 
 #### 1. Parsing documents
 

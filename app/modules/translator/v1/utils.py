@@ -6,12 +6,13 @@ from fastapi import HTTPException, Response
 import aiohttp
 from loguru import logger
 import asyncio
+from settings import settings
 
 
 async def post_request(url: str, payload: dict) -> Response:
     async with aiohttp.ClientSession() as session:
             try:
-                async with session.post(url, json=payload, timeout=1000 ) as resp:
+                async with session.post(url, json=payload, timeout=settings.POST_REQUEST_TIMEOUT) as resp:
                     response_body = await resp.read()
                     
                     if resp.status >= 400:
@@ -39,17 +40,13 @@ def retry(times, exceptions):
     :type Exceptions: Tuple of Exceptions
     """
     def decorator(func):
-        def newfn(*args, **kwargs):
-            attempt = 0
-            while attempt < times:
+        async def wrapper(*args, **kwargs):
+            for attempt in range(times):
                 try:
-                    return func(*args, **kwargs)
-                except exceptions:
-                    logger.warning(
-                        'Exception thrown when attempting to run %s, attempt '
-                        '%d of %d' % (func, attempt, times)
-                    )
-                    attempt += 1
-            return func(*args, **kwargs)
-        return newfn
+                    return await func(*args, **kwargs)
+                except exceptions as e:
+                    if attempt == times - 1:
+                        raise
+                    await asyncio.sleep(2 ** attempt)
+        return wrapper
     return decorator
