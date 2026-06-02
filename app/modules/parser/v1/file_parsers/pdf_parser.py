@@ -1,22 +1,19 @@
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 import tempfile
-import atexit
 import shutil
 
 import pypandoc
-from docling.document_converter import DocumentConverter
-from docling.datamodel.pipeline_options import PdfPipelineOptions
-from docling.datamodel.base_models import  InputFormat
+from docling.datamodel.pipeline_options import ThreadedPdfPipelineOptions
+from docling.datamodel.base_models import InputFormat
 from docling.pipeline.threaded_standard_pdf_pipeline import ThreadedStandardPdfPipeline
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.backend.docling_parse_backend import DoclingParseDocumentBackend
 
 
-from docling.backend.docling_parse_backend import DoclingParseDocumentBackend
 from loguru import logger
 from docling_core.types.doc import (
-    ImageRef, PictureItem, TableItem, ImageRefMode, TextItem, DocItemLabel, TableData
+    PictureItem, TableItem, TextItem, DocItemLabel
 )
 
 from modules.parser.v1.file_parsers.image_parser import ImageParser
@@ -28,13 +25,14 @@ class PDFParser(ParserABC):
     def __init__(self, parser_params: ParserParams):
         super().__init__(parser_params)
         self.converter = DocumentConverter()
-        self.pipeline_options = PdfPipelineOptions(artifacts_path=self.artifacts_path, 
-                                                   generate_parsed_pages=True, 
-                                                   generate_picture_images=True,
-                                                   generate_page_images=True,
-                                                   do_code_enrichment=True,
-                                                   do_ocr=False
-                                                   )
+        self.pipeline_options = ThreadedPdfPipelineOptions(
+            artifacts_path=self.artifacts_path,
+            generate_parsed_pages=True,
+            generate_picture_images=True,
+            generate_page_images=True,
+            do_code_enrichment=True,
+            do_ocr=False,
+        )
         
         
     def set_converter_options(self):

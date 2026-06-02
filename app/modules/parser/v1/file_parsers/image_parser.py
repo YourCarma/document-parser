@@ -8,12 +8,10 @@ from tempfile import NamedTemporaryFile
 
 import pypandoc
 from docling.pipeline.vlm_pipeline import VlmPipeline
-from docling.document_converter import DocumentConverter
 from docling.datamodel.pipeline_options import VlmPipelineOptions
 from docling.datamodel.pipeline_options_vlm_model import ApiVlmOptions, ResponseFormat
 from docling.datamodel.base_models import DocumentStream, InputFormat
 from docling.document_converter import DocumentConverter, ImageFormatOption
-from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
 from docling.backend.image_backend import ImageDocumentBackend
 from loguru import logger
 from urllib3 import exceptions
@@ -22,7 +20,6 @@ from modules.parser.v1.abc.abc import ParserABC
 from settings import settings
 from modules.parser.v1.schemas import DocLingAPIVLMOptionsParams, ParserMods
 from modules.parser.v1.exceptions import ServiceUnavailable, TimeoutError
-from settings import settings
 
 
 class ImageParser(ParserABC):
@@ -63,7 +60,7 @@ class ImageParser(ParserABC):
                         self,
                         prompt: str,
                         format: ResponseFormat = ResponseFormat.MARKDOWN,
-                        temperature: float = 0.7,
+                        temperature: float = 0.0,
                         max_tokens: int = 32000,
                         skip_special_tokens=False,
                     ):
@@ -80,7 +77,7 @@ class ImageParser(ParserABC):
                     headers=headers,
                     prompt=prompt,
                     timeout=settings.VLM_TIMEOUT_SECS,
-                    scale=1,
+                    scale=2.0,
                     temperature=temperature,
                     response_format=format,
                     concurrency=3
@@ -89,15 +86,15 @@ class ImageParser(ParserABC):
 
     def _get_prompt(self):
         prompt = """
-            Проанализируй изображение и выполни следующие действия:
-                1. Распознай весь текст, присутствующий на изображении
-                2. Не давай никаких описаний, комментариев или дополнительной информации
-                3. Преобразуй распознанный текст в корректный Markdown формат, сохраняя:
-                - Структуру текста (заголовки, абзацы, списки)
-                - Таблицы с соответствующим Markdown-синтаксисом
-                - Код или специальные блоки, если они присутствуют
-                4. Выведи только результат в формате Markdown
-                 """
+Convert this image to clean Markdown.
+
+Rules:
+1. Preserve all visible text. Do not summarize, explain, translate, or add content.
+2. Preserve the visible structure: headings, paragraphs, lists, tables, code blocks, quotes, and links.
+3. Use Markdown syntax only for structure.
+4. Represent tables as simple Markdown tables when possible.
+5. Return only the final Markdown content, without preambles or comments.
+"""
         return prompt
     
     def _set_converter_options(self):
@@ -176,6 +173,7 @@ class ImageParser(ParserABC):
             parsed_text = ImageParser(image).parse()
         except TimeoutError as e:
             logger.warning("Timeout error on image parsing...")
+            parsed_text = "*Время ожидания при парсинге изображения вышло*"
         except Exception as e:
             logger.error(f"Error while parsing element: {e}")
             parsed_text = "*При парсинге изображения возникла задержка сети*"

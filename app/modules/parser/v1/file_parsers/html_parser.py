@@ -5,12 +5,11 @@ import shutil
 
 import pypandoc
 from docling.document_converter import DocumentConverter, HTMLFormatOption
-from docling.datamodel.pipeline_options import PipelineOptions, PdfPipelineOptions
-from docling.document_converter import DocumentConverter, PowerpointFormatOption
-from docling.datamodel.base_models import  InputFormat
+from docling.datamodel.pipeline_options import ConvertPipelineOptions
+from docling.datamodel.base_models import InputFormat
 from loguru import logger
 from docling_core.types.doc import (
-    ImageRef, PictureItem, TableItem, ImageRefMode, TextItem, DocItemLabel, TableData
+    PictureItem, TableItem, TextItem, DocItemLabel
 )
 
 from modules.parser.v1.schemas import ParserParams, ParserMods
@@ -22,9 +21,9 @@ class HTMLParser(ParserABC):
     def __init__(self, parsers_params: ParserParams):
         super().__init__(parsers_params)
         self.converter = DocumentConverter()
-        self.pipeline_options = PdfPipelineOptions(artifacts_path=self.artifacts_path,
-                                                         generate_page_images=True,
-                                                         generate_picture_images=True)
+        self.pipeline_options = ConvertPipelineOptions(
+            artifacts_path=self.artifacts_path,
+        )
 
     def set_converter_options(self):
         self.converter = DocumentConverter(format_options={

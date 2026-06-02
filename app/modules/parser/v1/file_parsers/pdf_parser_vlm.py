@@ -1,13 +1,11 @@
 from pathlib import Path
 from typing import Optional, Union
 from tempfile import NamedTemporaryFile
-import json
 
 import pypandoc
 from loguru import logger
-from docling.document_converter import DocumentConverter
 from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import  (
+from docling.datamodel.pipeline_options import (
     VlmPipelineOptions
 )
 from docling.datamodel.pipeline_options_vlm_model import (
@@ -16,14 +14,12 @@ from docling.datamodel.pipeline_options_vlm_model import (
 from docling.document_converter import (
     DocumentConverter, PdfFormatOption
 )
-from docling.utils.deepseekocr_utils import parse_deepseekocr_markdown
 from docling.pipeline.vlm_pipeline import VlmPipeline
 
-from modules.parser.v1.file_parsers.image_parser import ImageParser
 from modules.parser.v1.abc.abc import ParserABC
-from modules.parser.v1.schemas import ParserParams, ParserMods
+from modules.parser.v1.schemas import ParserMods
 from settings import settings
-from modules.parser.v1.schemas import DocLingAPIVLMOptionsParams, ParserMods
+from modules.parser.v1.schemas import DocLingAPIVLMOptionsParams
 
 
 class PDFVLMParser(ParserABC):
@@ -39,7 +35,7 @@ class PDFVLMParser(ParserABC):
         self.pipeline_options = VlmPipelineOptions(enable_remote_services=True,
                                                    do_picture_classification=False,
                                                    artifacts_path=settings.ARTIFACTS_PATH,
-                                                   generate_page_images=False,
+                                                   generate_page_images=True,
                                                    do_picture_description=False
                                                    )
         self.artifacts_path = settings.ARTIFACTS_PATH
@@ -49,7 +45,7 @@ class PDFVLMParser(ParserABC):
                         self,
                         prompt: str,
                         format: ResponseFormat = ResponseFormat.MARKDOWN,
-                        temperature: float = 0.7,
+                        temperature: float = 0.0,
                         max_tokens: int = 16000,
                         skip_special_tokens=False,
                     ):
@@ -65,7 +61,7 @@ class PDFVLMParser(ParserABC):
                     headers=headers,
                     prompt=prompt,
                     timeout=settings.VLM_TIMEOUT_SECS,
-                    scale=1,
+                    scale=2.0,
                     temperature=temperature,
                     response_format=format,
                 )
@@ -84,23 +80,15 @@ class PDFVLMParser(ParserABC):
     
     def _get_prompt(self):
         prompt = """
-            ЗАДАНИЕ: КОНВЕРТАЦИЯ ДОКУМЕНТА
+Convert this PDF page to clean Markdown.
 
-Ты — конвертер. Твоя ЕДИНСТВЕННАЯ задача — преобразовать текст из предоставленного пользователем PDF в чистый Markdown. Ты НЕ пишешь статьи, не сочиняешь код и не даешь объяснений.
-
-ИНСТРУКЦИЯ К ВЫПОЛНЕНИЮ (соблюдай строго):
-1.  Дождись, когда пользователь пришлет содержимое PDF (текст, изображения таблиц).
-2.  Преобразуй полученный текст в Markdown, сохранив точную структуру (заголовки, абзацы, списки).
-3.  ВНУТРИ АБЗАЦЕВ УБЕРИ ВСЁ ФОРМАТИРОВАНИЕ: жирный (**жирный** → жирный), курсив (*курсив* → курсив) и т.д. Оставь только обычные слова.
-4.  Для структурных элементов ИСПОЛЬЗУЙ Markdown: # для заголовков, - для списков, > для цитат.
-5.  Если будут таблицы, представь их в простом Markdown-формате.
-6.  Ссылки оформи как [текст](url).
-
-ФИНАЛЬНЫЙ ВЫВОД:
-Выдай ТОЛЬКО итоговый Markdown-текст. Без преамбул, комментариев и пояснений. Начни сразу с конвертированного содержимого.
-
-Готов к приему текста PDF. Жду.
-                 """
+Rules:
+1. Preserve the visible document structure: headings, paragraphs, lists, tables, code blocks, quotes, and links.
+2. Preserve all visible text. Do not summarize, explain, translate, or add content.
+3. Use Markdown syntax only for structure. Avoid decorative inline formatting inside normal paragraphs.
+4. Represent tables as simple Markdown tables when possible.
+5. Return only the final Markdown content, without preambles or comments.
+"""
         return prompt
     
     def parse(self, mode: ParserMods):
