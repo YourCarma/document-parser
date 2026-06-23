@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     WEBHOOK_MANAGER_URL: str = "http://localhost:8010"
     WATCHTOWER_URL: str = "http://localhost:8020"
     WATCHTOWER_SHARED_HOST: str = "http://localhost:8020"
+    WATCHTOWER_SHARED_PREFIX: str = ""
     RESOURCE_MANAGER_URL: str = "http://localhost:8030"
 
     POST_REQUEST_TIMEOUT: int = 100

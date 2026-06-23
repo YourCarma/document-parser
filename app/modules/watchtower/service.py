@@ -1,3 +1,5 @@
+from urllib.parse import quote, urlsplit, urlunsplit
+
 import aiohttp
 from loguru import logger
 
@@ -12,6 +14,7 @@ class WatchtowerService:
 
     async def create_folder(self, bucket: str, prefix: str):
         """Создать placeholder-папку в bucket, если backend этого требует."""
+        prefix = self.encode_path(prefix)
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 f"{self.base_url}/api/v1/cloud/{bucket}/folder",
@@ -30,15 +33,25 @@ class WatchtowerService:
                     resp.status,
                 )
 
-    async def upload_file(self, bucket: str, local_path: str, filename: str) -> str:
+    async def upload_file(
+        self,
+        bucket: str,
+        local_path: str,
+        filename: str,
+        prefix: str = "",
+    ) -> str:
         """Загрузить локальный файл в bucket и вернуть object key."""
+        encoded_filename = self.encode_path(filename)
+        encoded_prefix = self.encode_path(prefix)
         async with aiohttp.ClientSession() as session:
             with open(local_path, "rb") as f:
                 form = aiohttp.FormData()
+                if encoded_prefix:
+                    form.add_field("prefix", encoded_prefix)
                 form.add_field(
                     "files",
                     f,
-                    filename=filename,
+                    filename=encoded_filename,
                     content_type="application/octet-stream",
                 )
                 async with session.put(
@@ -49,14 +62,17 @@ class WatchtowerService:
                     if resp.status not in (200, 201):
                         raise Exception(
                             f"Watchtower upload_file [{resp.status}] "
-                            f"bucket='{bucket}' file='{filename}': {body}"
+                            f"bucket='{bucket}' file='{encoded_filename}': {body}"
                         )
                     logger.info(
-                        "Watchtower: файл загружен bucket='{}' filename='{}'",
+                        "Watchtower: файл загружен bucket='{}' prefix='{}' filename='{}'",
                         bucket,
-                        filename,
+                        encoded_prefix,
+                        encoded_filename,
                     )
-        return filename
+        if encoded_prefix:
+            return f"{encoded_prefix}/{encoded_filename}"
+        return encoded_filename
 
     async def get_sharelink(
         self,
@@ -78,7 +94,7 @@ class WatchtowerService:
                 )
                 data = await resp.json()
                 url = data.get("message", "")
-                url = self._apply_shared_host(url)
+                url = self._apply_shared_prefix(url)
                 logger.info(
                     "Watchtower: получена share-ссылка bucket='{}' file_path='{}'",
                     bucket,
@@ -87,8 +103,24 @@ class WatchtowerService:
                 return url
 
     @staticmethod
-    def _apply_shared_host(url: str) -> str:
-        """Заменить внутренний host на публичный shared host, если он задан."""
+    def encode_path(path: str) -> str:
+        """URL-encode object path segment-by-segment, preserving folder separators."""
+        return "/".join(
+            quote(segment, safe="")
+            for segment in str(path).strip("/").split("/")
+            if segment
+        )
+
+    @staticmethod
+    def _apply_shared_prefix(url: str) -> str:
+        """Вернуть относительный frontend path или старую host-based ссылку."""
+        shared_prefix = settings.WATCHTOWER_SHARED_PREFIX.strip("/")
+        if url and shared_prefix:
+            parsed = urlsplit(url)
+            path = parsed.path if parsed.scheme or parsed.netloc else urlsplit(url).path
+            path = f"/{shared_prefix}/{path.lstrip('/')}"
+            return urlunsplit(("", "", path, parsed.query, parsed.fragment))
+
         if not url or not settings.WATCHTOWER_SHARED_HOST:
             return url
         host = settings.WATCHTOWER_SHARED_HOST.rstrip("/")

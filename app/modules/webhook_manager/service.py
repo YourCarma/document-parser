@@ -5,8 +5,8 @@ import aiohttp
 from loguru import logger
 
 from modules.webhook_manager.schemas import (
-    Task, TaskCreation, TaskProgress, TaskStatus,
-    ProgressUpdate, ResponseDataUpdate,
+    Task, TaskProgress, TaskStatus,
+    TaskCreationV2, ProgressUpdate, ResponseDataUpdate,
 )
 from settings import settings
 
@@ -33,10 +33,10 @@ class WebhookManagerService:
             updated_at=now,
             response_data=json.dumps(response_data, ensure_ascii=False),
         )
-        payload = TaskCreation(key=key, task=task)
+        payload = TaskCreationV2(task=task)
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                f"{self.base_url}/storage/task",
+                f"{self.base_url}/api/v2/storage/task",
                 json=payload.model_dump(mode="json"),
             ) as resp:
                 body = await resp.text()
@@ -56,7 +56,7 @@ class WebhookManagerService:
         )
         async with aiohttp.ClientSession() as session:
             async with session.patch(
-                f"{self.base_url}/storage/update_progress",
+                f"{self.base_url}/api/v1/storage/update_progress",
                 json=payload.model_dump(mode="json"),
             ) as resp:
                 if resp.status != 200:
@@ -74,7 +74,7 @@ class WebhookManagerService:
         )
         async with aiohttp.ClientSession() as session:
             async with session.patch(
-                f"{self.base_url}/storage/update_response_data",
+                f"{self.base_url}/api/v1/storage/update_response_data",
                 json=payload.model_dump(mode="json"),
             ) as resp:
                 if resp.status != 200:

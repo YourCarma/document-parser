@@ -86,7 +86,7 @@ Parser factory consists of **5** parser types, which having own processing algor
 - `VLM_BASE_URL`, `VLM_MODEL_NAME`, `VLM_API_KEY`, `VLM_MAX_TOKENS`, `VLM_TIMEOUT_SECS` — настройки VLM.
 - `TRANSLATOR_ADDRESS`, `TRANSLATE_URI` — адрес сервиса перевода.
 - `DETECT_LANGUAGE_URL` — адрес сервиса определения языка.
-- `WEBHOOK_MANAGER_URL`, `WATCHTOWER_URL`, `WATCHTOWER_SHARED_HOST`, `RESOURCE_MANAGER_URL` — интеграционные сервисы.
+- `WEBHOOK_MANAGER_URL`, `WATCHTOWER_URL`, `WATCHTOWER_SHARED_HOST`, `WATCHTOWER_SHARED_PREFIX`, `RESOURCE_MANAGER_URL` — интеграционные сервисы. `WATCHTOWER_SHARED_PREFIX` задаёт относительный frontend-префикс для ссылок на файлы, например `/api/gateway`.
 - `TRANSALTOR_MAX_CONCURRENCY` — ограничение параллельных запросов к переводчику.
 
 Пример запуска по умолчанию использует `.env.dev`. Для production-сценария можно задать `ENV_FILE=/path/to/.env.production`.

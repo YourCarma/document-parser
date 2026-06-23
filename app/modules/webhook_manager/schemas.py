@@ -32,6 +32,10 @@ class TaskCreation(BaseModel):
     task: Task
 
 
+class TaskCreationV2(BaseModel):
+    task: Task
+
+
 class ProgressUpdate(BaseModel):
     key: str
     progress: TaskProgress

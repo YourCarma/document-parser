@@ -29,6 +29,7 @@ _STAGE_MESSAGES: dict[str, str] = {
     "перевод документа": "Ошибка в сервисе переводчика",
     "загрузка переведённого файла": "Ошибка при загрузке переведённого файла в хранилище",
 }
+_TRANSLATION_TIMEOUT_FALLBACK_SUFFIX = " (ошибка запроса, переведите вручную)"
 
 
 def _stage_to_user_message(stage: str) -> str:
@@ -83,14 +84,16 @@ class TranslatorV2Service:
                 source_language,
                 target_language,
             )
+            storage_prefix = f"{user_id}/translator"
 
             current_stage = "загрузка оригинального файла"
             await self._update(
                 task_key, response_data, 5, TaskStatus.PROCESSING,
                 "Загружаю оригинальный файл...",
             )
+            await self.watchtower.create_folder(bucket, storage_prefix)
             object_key = await self.watchtower.upload_file(
-                bucket, file_path, original_filename
+                bucket, file_path, original_filename, prefix=storage_prefix
             )
             original_link = await self.watchtower.get_sharelink(bucket, object_key)
             response_data.original_file = original_link
@@ -135,7 +138,7 @@ class TranslatorV2Service:
             stem = Path(original_filename).stem
             translated_filename = f"{stem}_(переведённый).docx"
             translated_key = await self.watchtower.upload_file(
-                bucket, translated_path, translated_filename
+                bucket, translated_path, translated_filename, prefix=storage_prefix
             )
             translated_link = await self.watchtower.get_sharelink(bucket, translated_key)
             response_data.translated_file = translated_link
@@ -237,26 +240,34 @@ class TranslatorV2Service:
         progress_tasks: list[asyncio.Task] = []
 
         async def translate_tracked(text: str) -> str:
-            result = await translator.translate_element_limited(text)
-            completed[0] += 1
-            n = completed[0]
-            if n % update_every == 0 or n == total:
-                progress = 15 + 78 * (n / total)  # 15 → 93
-                status_text = f"Перевожу... {n}/{total} элементов"
-                logger.debug(
-                    "TranslatorV2: прогресс перевода key='{}' progress={:.1f} translated={}/{}",
+            try:
+                return await translator.translate_element_limited(text)
+            except TimeoutError:
+                logger.warning(
+                    "TranslatorV2: timeout при переводе элемента key='{}', оставляю оригинальный текст",
                     task_key,
-                    progress,
-                    n,
-                    total,
                 )
-                snapshot = {**response_data.model_dump(), "text_status": status_text}
-                async def _send(p=progress, s=snapshot):
-                    await self.webhook.update_progress(task_key, p, TaskStatus.PROCESSING)
-                    await self.webhook.update_response_data(task_key, s)
+                return f"{text}{_TRANSLATION_TIMEOUT_FALLBACK_SUFFIX}"
+            finally:
+                completed[0] += 1
+                n = completed[0]
+                if n % update_every == 0 or n == total:
+                    progress = 15 + 78 * (n / total)  # 15 → 93
+                    status_text = f"Перевожу... {n}/{total} элементов"
+                    logger.debug(
+                        "TranslatorV2: прогресс перевода key='{}' progress={:.1f} translated={}/{}",
+                        task_key,
+                        progress,
+                        n,
+                        total,
+                    )
+                    snapshot = {**response_data.model_dump(), "text_status": status_text}
 
-                progress_tasks.append(asyncio.create_task(_send()))
-            return result
+                    async def _send(p=progress, s=snapshot):
+                        await self.webhook.update_progress(task_key, p, TaskStatus.PROCESSING)
+                        await self.webhook.update_response_data(task_key, s)
+
+                    progress_tasks.append(asyncio.create_task(_send()))
 
         if text_elements:
             results = await asyncio.gather(
