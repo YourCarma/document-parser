@@ -63,11 +63,17 @@ class DocLingAPIVLMOptionsParams(BaseModel):
 class FileFormats(list[str], enum.Enum):
     IMAGE = [".jpg", ".jpeg", ".png", ".tiff", ".bmp", ".webp"]
     PDF = [".pdf"]
-    DOC = [".docx", ".odt", ".doc", '.rtf']
-    PPTX = [".pptx", ".odp"]
-    XLSX = [".xlsx", ".ods"]
+    DOC = [".docx", ".doc", ".rtf"]
+    PPTX = [".pptx"]
+    XLSX = [".xlsx"]
+    ODT = [".odt", ".ott"]
+    ODS = [".ods", ".ots"]
+    ODP = [".odp", ".otp"]
     HTML = [".html"]
-    TXT = [".txt"]
+    TXT = [".txt", ".text", ".md", ".qmd", ".Rmd", ".rmd"]
+    EPUB = [".epub"]
+    EMAIL = [".eml"]
+    XBRL = [".xbrl", ".xml"]
 
 class ParserMods(str, enum.Enum):
     TO_TEXT = "to_text"

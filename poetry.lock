@@ -270,6 +270,46 @@ typing_extensions = {version = ">=4.5", markers = "python_version < \"3.13\""}
 trio = ["trio (>=0.32.0)"]
 
 [[package]]
+name = "arelle-release"
+version = "2.41.6"
+description = "An open source XBRL platform."
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "arelle_release-2.41.6-py3-none-any.whl", hash = "sha256:4969b75a723f0c02c482968a21fb4e9236c3fb52b31daac4c74784505615fa1a"},
+    {file = "arelle_release-2.41.6.tar.gz", hash = "sha256:6be5bd130b960752ac93f054defedaa2b391444cd777114631609e2964384ded"},
+]
+
+[package.dependencies]
+bottle = ">=0.13,<0.14"
+certifi = "*"
+filelock = "*"
+isodate = ">=0,<1"
+jaconv = ">=0,<1"
+jsonschema = ">=4,<5"
+lxml = ">=4,<6.0.0 || >6.0.0,<7"
+numpy = ">=1,<3"
+openpyxl = ">=3,<4"
+pillow = ">=10,<13"
+pyparsing = ">=3,<4"
+python-dateutil = ">=2,<3"
+regex = "*"
+truststore = ">=0,<1"
+typing-extensions = ">=4,<5"
+
+[package.extras]
+crypto = ["pycryptodome (>=3,<4)"]
+db = ["PyMySQL (>=1,<2)", "oracledb (>=3,<5)", "pg8000 (>=1,<2)", "pyodbc (>=4,<6)", "rdflib (>=5,<8)"]
+efm = ["aniso8601 (>=10,<11)", "holidays (>=0,<1)", "matplotlib (>=3,<4)", "pytz"]
+esef = ["tinycss2 (>=1,<2)"]
+gui = ["pywin32 (>=300,<400) ; sys_platform == \"win32\""]
+objectmaker = ["graphviz (>=0,<1)"]
+viewer = ["ixbrl-viewer (>=1,<2)"]
+webserver = ["cheroot (>=8,<12)", "tornado (>=6,<7)"]
+xule = ["aniso8601 (>=10,<11)"]
+
+[[package]]
 name = "attrs"
 version = "26.1.0"
 description = "Classes Without Boilerplate"
@@ -303,6 +343,18 @@ chardet = ["chardet"]
 charset-normalizer = ["charset-normalizer"]
 html5lib = ["html5lib"]
 lxml = ["lxml"]
+
+[[package]]
+name = "bottle"
+version = "0.13.4"
+description = "Fast and simple WSGI-framework for small web-applications."
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "bottle-0.13.4-py2.py3-none-any.whl", hash = "sha256:045684fbd2764eac9cdeb824861d1551d113e8b683d8d26e296898d3dd99a12e"},
+    {file = "bottle-0.13.4.tar.gz", hash = "sha256:787e78327e12b227938de02248333d788cfe45987edca735f8f88e03472c3f47"},
+]
 
 [[package]]
 name = "certifi"
@@ -674,46 +726,66 @@ trio = ["trio (>=0.30)"]
 wmi = ["wmi (>=1.5.1) ; platform_system == \"Windows\""]
 
 [[package]]
+name = "doclang"
+version = "0.7.2"
+description = "DocLang reference toolkit"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "doclang-0.7.2-py3-none-any.whl", hash = "sha256:fa4414931122c6b9d18a8b1fd6cec3d0dd22dad4efec495ab4461240a8cdf7ed"},
+    {file = "doclang-0.7.2.tar.gz", hash = "sha256:89c17a168ef9443c2f814284bae3ea3dbf2f1910e79d4fd6cbdde04aa7c06d40"},
+]
+
+[package.dependencies]
+lxml = ">=4.8.0"
+typer = ">=0.15.1"
+
+[package.extras]
+schematron-saxon = ["saxonche (>=12.9.0)"]
+
+[[package]]
 name = "docling"
-version = "2.96.1"
+version = "2.110.0"
 description = "SDK and CLI for parsing PDF, DOCX, HTML, and more, to a unified document representation for powering downstream workflows such as gen AI applications."
 optional = false
 python-versions = "<4.0,>=3.10"
 groups = ["main"]
 files = [
-    {file = "docling-2.96.1-py3-none-any.whl", hash = "sha256:a4bd3e644f532fae75561f432e5c2a1f59788b6a24344af277493dfed1c78402"},
-    {file = "docling-2.96.1.tar.gz", hash = "sha256:6265f0ebeacd851c9fcbeb3c1220ce17f4165683d17e33dfdc0ba2ac435e5f1a"},
+    {file = "docling-2.110.0-py3-none-any.whl", hash = "sha256:08eb4fd4fa5e44c0350596d1832a66e23be78f84b440bdcdd278e1a666b0b46b"},
+    {file = "docling-2.110.0.tar.gz", hash = "sha256:42d9f409871299b4e09b9f0fbb9ac844d3f586cecf9f0227cbceb9b0a35e2aa5"},
 ]
 
 [package.dependencies]
-docling-slim = {version = "2.96.1", extras = ["standard"]}
+docling-slim = {version = "2.110.0", extras = ["standard"]}
 
 [package.extras]
-asr = ["docling-slim[format-audio] (==2.96.1)"]
-easyocr = ["docling-slim[feat-ocr-easyocr] (==2.96.1)"]
-htmlrender = ["docling-slim[format-html-render] (==2.96.1)"]
-ocrmac = ["docling-slim[feat-ocr-mac] (==2.96.1)"]
-onnxruntime = ["docling-slim[models-onnxruntime] (==2.96.1)"]
-rapidocr = ["docling-slim[feat-ocr-rapidocr-onnx] (==2.96.1)"]
-remote-serving = ["docling-slim[models-remote] (==2.96.1)"]
-tesserocr = ["docling-slim[feat-ocr-tesserocr] (==2.96.1)"]
-vlm = ["docling-slim[models-vlm-inline] (==2.96.1)"]
-xbrl = ["docling-slim[format-xml-xbrl] (==2.96.1)"]
+asr = ["docling-slim[format-audio] (==2.110.0)"]
+easyocr = ["docling-slim[feat-ocr-easyocr] (==2.110.0)"]
+htmlrender = ["docling-slim[format-html-render] (==2.110.0)"]
+ocrmac = ["docling-slim[feat-ocr-mac] (==2.110.0)"]
+onnxruntime = ["docling-slim[models-onnxruntime] (==2.110.0)"]
+rapidocr = ["docling-slim[feat-ocr-rapidocr-onnx] (==2.110.0)"]
+remote-serving = ["docling-slim[models-remote] (==2.110.0)"]
+tesserocr = ["docling-slim[feat-ocr-tesserocr] (==2.110.0)"]
+vlm = ["docling-slim[models-vlm-inline] (==2.110.0)"]
+xbrl = ["docling-slim[format-xml-xbrl] (==2.110.0)"]
 
 [[package]]
 name = "docling-core"
-version = "2.78.0"
+version = "2.86.0"
 description = "A python library to define and validate data types in Docling."
 optional = false
 python-versions = "<4.0,>=3.10"
 groups = ["main"]
 files = [
-    {file = "docling_core-2.78.0-py3-none-any.whl", hash = "sha256:69c0d67e87e4d3aec1509a758691a27e8ba0496f61a85ba705cc48a5b21ffe86"},
-    {file = "docling_core-2.78.0.tar.gz", hash = "sha256:d8b795bbd9c29b84f85dbe5ef273d968fead350c96589620d0eae01b0bb0c825"},
+    {file = "docling_core-2.86.0-py3-none-any.whl", hash = "sha256:2d9e834a58bd7786e568db94268c2c2db90f9f2f95c65ea084bf1399855be85b"},
+    {file = "docling_core-2.86.0.tar.gz", hash = "sha256:2e4e86a874811e248275544e265929710d72db2ecd13e3e61c354da8290ec9e8"},
 ]
 
 [package.dependencies]
 defusedxml = ">=0.7.1,<0.8.0"
+doclang = ">=0.7,<0.8"
 jsonref = ">=1.1.0,<2.0.0"
 jsonschema = ">=4.16.0,<5.0.0"
 latex2mathml = ">=3.77.0,<4.0.0"
@@ -724,7 +796,10 @@ pydantic-settings = ">=2.14.0"
 pyyaml = ">=5.1,<7.0.0"
 semchunk = {version = ">=2.2.0,<4.0.0", optional = true, markers = "extra == \"chunking\""}
 tabulate = ">=0.9.0,<0.11.0"
-transformers = {version = ">=4.34.0,<6.0.0", optional = true, markers = "extra == \"chunking\""}
+transformers = [
+    {version = ">=4.34.0,<5.0.dev0 || >=5.4.dev0,<5.9.0", optional = true, markers = "sys_platform == \"darwin\" and extra == \"chunking\""},
+    {version = ">=4.34.0,<5.0.dev0 || >=5.4.dev0,<6.0.0", optional = true, markers = "sys_platform != \"darwin\" and extra == \"chunking\""},
+]
 tree-sitter = {version = ">=0.25.0,<0.27.0", optional = true, markers = "extra == \"chunking\""}
 tree-sitter-c = {version = ">=0.23.4", optional = true, markers = "extra == \"chunking\""}
 tree-sitter-javascript = {version = ">=0.23.1", optional = true, markers = "extra == \"chunking\""}
@@ -734,7 +809,7 @@ typer = ">=0.12.5,<0.25.0"
 typing-extensions = ">=4.12.2,<5.0.0"
 
 [package.extras]
-chunking = ["semchunk (>=2.2.0,<4.0.0)", "transformers (>=4.34.0,<6.0.0)", "tree-sitter (>=0.25.0,<0.27.0)", "tree-sitter-c (>=0.23.4)", "tree-sitter-javascript (>=0.23.1)", "tree-sitter-python (>=0.23.6)", "tree-sitter-typescript (>=0.23.2)"]
+chunking = ["semchunk (>=2.2.0,<4.0.0)", "transformers (>=4.34.0,<5.0.dev0 || >=5.4.dev0,<5.9.0) ; sys_platform == \"darwin\"", "transformers (>=4.34.0,<5.0.dev0 || >=5.4.dev0,<6.0.0) ; sys_platform != \"darwin\"", "tree-sitter (>=0.25.0,<0.27.0)", "tree-sitter-c (>=0.23.4)", "tree-sitter-javascript (>=0.23.1)", "tree-sitter-python (>=0.23.6)", "tree-sitter-typescript (>=0.23.2)"]
 chunking-openai = ["semchunk (>=2.2.0,<4.0.0)", "tiktoken (>=0.9.0,<0.13.0)", "tree-sitter (>=0.25.0,<0.27.0)", "tree-sitter-c (>=0.23.4)", "tree-sitter-javascript (>=0.23.1)", "tree-sitter-python (>=0.23.6)", "tree-sitter-typescript (>=0.23.2)"]
 examples = ["datasets (>=4.0.0)", "matplotlib (>=3.7.0)", "openpyxl (>=3.1.5)"]
 
@@ -771,52 +846,51 @@ opencv-python-headless = ["opencv-python-headless (>=4.6.0.66,<5.0.0.0)"]
 
 [[package]]
 name = "docling-parse"
-version = "6.2.0"
+version = "7.6.0"
 description = "Simple package to extract text with coordinates from programmatic PDFs"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "docling_parse-6.2.0-cp310-cp310-macosx_14_0_arm64.whl", hash = "sha256:250c01fa68b56e35c11f884dce6f061bd7aebb21a5c146aa72b8c52d29f78bfd"},
-    {file = "docling_parse-6.2.0-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:7209e39385adc0dffc305d9c3ba4f8098ca9723a82f1f9f343369072d7934704"},
-    {file = "docling_parse-6.2.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f078d2cb305207335d2ec0980ad1712ae78cddd570f75ac5b603f6a3bf3c3406"},
-    {file = "docling_parse-6.2.0-cp310-cp310-win_amd64.whl", hash = "sha256:8132631b37b9a1e4fc6c25f470c76f8e2f54b8a4c112227aaccbe2e77f32b504"},
-    {file = "docling_parse-6.2.0-cp311-cp311-macosx_14_0_arm64.whl", hash = "sha256:a6d915c2521a556946f75f66b46a9692a315c8ded318f695804e90f32c420bb0"},
-    {file = "docling_parse-6.2.0-cp311-cp311-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:06d3aa622950952fe868e8b576026e9e1a5295e1c07f10e4e809f8745548ac73"},
-    {file = "docling_parse-6.2.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:aa428204bfcd07d7fd28bfe0aae3511c17d1167048313c7347880d3a03201038"},
-    {file = "docling_parse-6.2.0-cp311-cp311-win_amd64.whl", hash = "sha256:883ef9e545f4545ab50ce6cf27df9dc9816e4d9c5e07cfb37d8bfa672c10c948"},
-    {file = "docling_parse-6.2.0-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:6085c2d4611c16fb9b6b96472e4d3ecea4ca701d9b8be58776b4d2572cd98cdc"},
-    {file = "docling_parse-6.2.0-cp312-cp312-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:33093dfb3c8105feb618887a127b19327e09fae7bf374eecbf5d10663d474a1e"},
-    {file = "docling_parse-6.2.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:05f6b1e15408741953ee4beb61442168c3267489634ce16ebd8e9214deec621e"},
-    {file = "docling_parse-6.2.0-cp312-cp312-win_amd64.whl", hash = "sha256:6f2be525e2b117afe84033375354c1cee4f77a4598807ca75d5873fd507a52e1"},
-    {file = "docling_parse-6.2.0-cp313-cp313-macosx_14_0_arm64.whl", hash = "sha256:c5377a1061d10ed1ac951ae9d3b08a0c0ab7a9277481d58d78284af8e533496c"},
-    {file = "docling_parse-6.2.0-cp313-cp313-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:6ffc27d4f02a119049904267712429865b028214e1ebaa1ced7bf3ce618b078a"},
-    {file = "docling_parse-6.2.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:f8d269e41c7fc2d12f22418b163920f0c4ab11d63b945d3425e28d6d2aef30c5"},
-    {file = "docling_parse-6.2.0-cp313-cp313-win_amd64.whl", hash = "sha256:b2fb3942929eba7bebea5ba62e79d2fd789705367b62987d1928b120b8b1dd0a"},
-    {file = "docling_parse-6.2.0-cp314-cp314-macosx_14_0_arm64.whl", hash = "sha256:b31d928a08a8b3c04d5b3a40a03cdb85130c7aa204c1cc41319cb7fc2b15f960"},
-    {file = "docling_parse-6.2.0-cp314-cp314-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:ceb56f53d27dc3e8a85142c783a80ee91a37d4890b2346d52de439f3a0ca2773"},
-    {file = "docling_parse-6.2.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:81514a0109e394be018fb8283ab4f2716b829e291ae4bd2daa6a814fdbd6c0d0"},
-    {file = "docling_parse-6.2.0-cp314-cp314-win_amd64.whl", hash = "sha256:1a5cd6cf5e2f8f9deb608fb7302d8fc1fa26c048406aa0c2073d4167e09af113"},
-    {file = "docling_parse-6.2.0.tar.gz", hash = "sha256:f13d6c49e3b5f9caaf0d626e0dcc7948c5b4700d0eae0559ec353ed07c4f2f50"},
+    {file = "docling_parse-7.6.0-cp310-cp310-macosx_14_0_arm64.whl", hash = "sha256:edb4edf5877420461870ab67951145616c2b47167f35617aebc71edcac8a3789"},
+    {file = "docling_parse-7.6.0-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:333baa14fce5d6eb44d2c815e7cea8c308698960dc5453f56a64820c95f98a23"},
+    {file = "docling_parse-7.6.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0754ddf502e41e98245ec81dba0db969a54b8817baeb952f5483a368864decc3"},
+    {file = "docling_parse-7.6.0-cp310-cp310-win_amd64.whl", hash = "sha256:3af16c68ff3503903af43808ab7677848cb8f325e27789a5fbb3f6418e50fe0e"},
+    {file = "docling_parse-7.6.0-cp311-cp311-macosx_14_0_arm64.whl", hash = "sha256:c2e36998e5c5567d9ee533c367cd453988498c35c246816d6d39ba054b567ef1"},
+    {file = "docling_parse-7.6.0-cp311-cp311-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:f4af18aea343fd0c2ce9b588a17a0ac5708d5fc82d37c211655f70150a21868a"},
+    {file = "docling_parse-7.6.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:30d597b4f01c9cc07b8e840f02a23d5f4d7a3b3e6bf2b64201a4cd5e3918b036"},
+    {file = "docling_parse-7.6.0-cp311-cp311-win_amd64.whl", hash = "sha256:b03a7475912d70ffd20d7d77572afa17a688a9cd851ec7a46c5bb136e66315da"},
+    {file = "docling_parse-7.6.0-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:178700f4d9274f523eb6ea0bff7cbc18ea77ea4f3fd95832b0fbe0766fa2273f"},
+    {file = "docling_parse-7.6.0-cp312-cp312-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:7e21adb450e55846b4d2697e8b3078186b7bc1d1dd8f21a14fd14a6a9bee4abf"},
+    {file = "docling_parse-7.6.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:e7edc19c8c451fa078485f94a0f9c5ea02e8527c9b3b0eb7aedad845abb3ee8f"},
+    {file = "docling_parse-7.6.0-cp312-cp312-win_amd64.whl", hash = "sha256:96c113f07c8821c3f20b5b12626638d2c6ecb0c850361feee92a8ec55727e098"},
+    {file = "docling_parse-7.6.0-cp313-cp313-macosx_14_0_arm64.whl", hash = "sha256:b547ff6c479e713f61700ab925db3893c0b9857f9dff977a411dc4616adea782"},
+    {file = "docling_parse-7.6.0-cp313-cp313-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:9afc0b8161fc148b78efd1c65a27fcf0044fa79cb8ae4a07bd6c22ce46b39c73"},
+    {file = "docling_parse-7.6.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:cfbdddfb3999e287c0900e43d01d93d1f9ab1a0165bef5caf8536747c05e5df9"},
+    {file = "docling_parse-7.6.0-cp313-cp313-win_amd64.whl", hash = "sha256:ba9101a107bd107397389766c05203b19ec74617fe99615ac0a5e402b360a0c6"},
+    {file = "docling_parse-7.6.0-cp314-cp314-macosx_14_0_arm64.whl", hash = "sha256:e482670ccac032e6a019503f48978adf1c5d62b522fd6e8c1d4749c599aa9426"},
+    {file = "docling_parse-7.6.0-cp314-cp314-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:d520566c51f2b4e0a36030e47a5f994267a9fd4cc94cf2ce73154df40daa8a33"},
+    {file = "docling_parse-7.6.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:aff1041a10008575c2567f27829ffb6baaa16334f14ff31fbafc85b73c08b4d8"},
+    {file = "docling_parse-7.6.0-cp314-cp314-win_amd64.whl", hash = "sha256:84888838eb77874efa97d84bf84f56524d7b17e9a2a62efba90e126eebab1dce"},
+    {file = "docling_parse-7.6.0.tar.gz", hash = "sha256:0816d9758d0304478a8ec73372ca3b6fc1cfee88aa239ef9e66942ab7f22d720"},
 ]
 
 [package.dependencies]
-docling-core = ">=2.65.2"
+docling-core = ">=2.85.0,<3.0.0"
 pillow = ">=10.0.0,<13.0.0"
 pydantic = ">=2.0.0"
 pywin32 = {version = ">=305", markers = "sys_platform == \"win32\""}
-tabulate = ">=0.9.0,<1.0.0"
 
 [[package]]
 name = "docling-slim"
-version = "2.96.1"
+version = "2.110.0"
 description = "Modular version of the Docling package: SDK and CLI for parsing PDF, DOCX, HTML, and more, to a unified document representation for powering downstream workflows such as gen AI applications."
 optional = false
 python-versions = "<4.0,>=3.10"
 groups = ["main"]
 files = [
-    {file = "docling_slim-2.96.1-py3-none-any.whl", hash = "sha256:0d0a76d3a853bf0841710a1564d51694391bf8167b32e795ce501786f0e09cb6"},
-    {file = "docling_slim-2.96.1.tar.gz", hash = "sha256:577b383e6397f1ff4111778dc524a82f06d4ab910ebfece5c82e23dd0d86ba2b"},
+    {file = "docling_slim-2.110.0-py3-none-any.whl", hash = "sha256:e08630c769edc9043f6eadeea7152eba8f2599810124db8546c1aaf3675f433b"},
+    {file = "docling_slim-2.110.0.tar.gz", hash = "sha256:3574491b10fea545ca0494deeb6080e0fa7abcf8e367dbd358849a85da75c792"},
 ]
 
 [package.dependencies]
@@ -825,15 +899,16 @@ beautifulsoup4 = {version = ">=4.12.3,<5.0.0", optional = true, markers = "extra
 certifi = ">=2024.7.4"
 defusedxml = {version = ">=0.7.1,<0.8.0", optional = true, markers = "extra == \"standard\""}
 docling-core = [
-    {version = ">=2.77.1,<3.0.0"},
+    {version = ">=2.86.0,<3.0.0"},
     {version = ">=2.73.0,<3.0.0", extras = ["chunking"], optional = true, markers = "extra == \"standard\""},
 ]
 docling-ibm-models = {version = ">=3.13.0,<4", optional = true, markers = "extra == \"standard\""}
-docling-parse = {version = ">=6.2.0,<7.0.0", optional = true, markers = "extra == \"standard\""}
+docling-parse = {version = ">=7.0.0,<8.0.0", optional = true, markers = "extra == \"standard\""}
 filetype = ">=1.2.0,<2.0.0"
 httpx = {version = ">=0.28,<1.0.0", optional = true, markers = "extra == \"standard\""}
 huggingface-hub = {version = ">=0.23,<2", optional = true, markers = "extra == \"standard\""}
 lxml = {version = ">=4.0.0,<7.0.0", optional = true, markers = "extra == \"standard\""}
+mail-parser = {version = ">=4.1.4,<5.0.0", optional = true, markers = "extra == \"standard\""}
 marko = {version = ">=2.1.2,<3.0.0", optional = true, markers = "extra == \"standard\""}
 numpy = {version = ">=1.24.0,<3.0.0", optional = true, markers = "extra == \"standard\""}
 openpyxl = {version = ">=3.1.5,<4.0.0", optional = true, markers = "extra == \"standard\""}
@@ -845,8 +920,9 @@ pydantic-settings = ">=2.3.0,<3.0.0"
 pylatexenc = {version = ">=2.10,<3.0", optional = true, markers = "extra == \"standard\""}
 pypdfium2 = {version = ">=4.30.0,<4.30.1 || >4.30.1,<6.0.0", optional = true, markers = "extra == \"standard\""}
 python-docx = {version = ">=1.1.2,<2.0.0", optional = true, markers = "extra == \"standard\""}
+python-dotenv = {version = ">=1.0,<2.0", optional = true, markers = "extra == \"standard\""}
 python-pptx = {version = ">=1.0.2,<2.0.0", optional = true, markers = "extra == \"standard\""}
-rapidocr = {version = ">=3.8,<4.0.0", optional = true, markers = "extra == \"standard\""}
+rapidocr = {version = ">=3.9.1,<4.0.0", optional = true, markers = "extra == \"standard\""}
 requests = ">=2.32.2,<3.0.0"
 rich = {version = ">=13.0.0", optional = true, markers = "extra == \"standard\""}
 rtree = {version = ">=1.3.0,<2.0.0", optional = true, markers = "extra == \"standard\""}
@@ -854,29 +930,32 @@ scipy = {version = ">=1.6.0,<2.0.0", optional = true, markers = "extra == \"stan
 torch = {version = ">=2.2.2,<3.0.0", optional = true, markers = "extra == \"standard\""}
 torchvision = {version = ">=0,<1", optional = true, markers = "extra == \"standard\""}
 tqdm = ">=4.65.0,<5.0.0"
-typer = {version = ">=0.12.5,<0.22.0", optional = true, markers = "extra == \"standard\""}
+typer = {version = ">=0.12.5,<0.27.0", optional = true, markers = "extra == \"standard\""}
 websockets = {version = ">=14.0,<17.0", optional = true, markers = "extra == \"standard\""}
 
 [package.extras]
-all = ["accelerate (>=1.0.0,<2)", "accelerate (>=1.2.1,<2.0.0)", "arelle-release (>=2.38.17,<3.0.0)", "beautifulsoup4 (>=4.12.3,<5.0.0)", "defusedxml (>=0.7.1,<0.8.0)", "docling-core[chunking] (>=2.73.0,<3.0.0)", "docling-ibm-models (>=3.13.0,<4)", "docling-parse (>=6.2.0,<7.0.0)", "easyocr (>=1.7,<2.0)", "httpx (>=0.28,<1.0.0)", "huggingface-hub (>=0.23,<2)", "lxml (>=4.0.0,<7.0.0)", "marko (>=2.1.2,<3.0.0)", "mlx-vlm (>=0.4.3,<1.0.0) ; python_version >= \"3.10\" and sys_platform == \"darwin\" and platform_machine == \"arm64\"", "mlx-whisper (>=0.4.3) ; python_version >= \"3.10\" and sys_platform == \"darwin\" and platform_machine == \"arm64\"", "numba (>=0.63.0)", "numpy (>=1.24.0,<3.0.0)", "ocrmac (>=1.0.0,<2.0.0) ; sys_platform == \"darwin\"", "onnxruntime (<1.24) ; python_version < \"3.14\" and sys_platform == \"darwin\"", "onnxruntime-gpu (<1.24) ; python_version < \"3.14\" and (sys_platform == \"linux\" or sys_platform == \"win32\")", "openai-whisper (>=20250625)", "openpyxl (>=3.1.5,<4.0.0)", "pandas (>=2.1.4,<4.0.0)", "peft (>=0.18.1)", "pillow (>=10.0.0,<13.0.0)", "playwright (>=1.58.0)", "polyfactory (>=2.22.2)", "pylatexenc (>=2.10,<3.0)", "pypdfium2 (>=4.30.0,!=4.30.1,<6.0.0)", "python-docx (>=1.1.2,<2.0.0)", "python-pptx (>=1.0.2,<2.0.0)", "qwen-vl-utils (>=0.0.11)", "rapidocr (>=3.8,<4.0.0)", "rich (>=13.0.0)", "rtree (>=1.3.0,<2.0.0)", "scikit-image (>=0.19)", "scipy (>=1.6.0,<2.0.0)", "tesserocr (>=2.7.1,<3.0.0)", "torch (>=2.2.2,<3.0.0)", "torchvision (>=0,<1)", "transformers (>=4.42.0,<5.0.dev0 || >=5.4.dev0,<6.0.0)", "tritonclient[grpc] (>=2.65.0,<3.0.0)", "typer (>=0.12.5,<0.22.0)", "websockets (>=14.0,<17.0)"]
-cli = ["rich (>=13.0.0)", "typer (>=0.12.5,<0.22.0)"]
+all = ["accelerate (>=1.0.0,<2)", "accelerate (>=1.2.1,<2.0.0)", "arelle-release (>=2.38.17,<3.0.0)", "beautifulsoup4 (>=4.12.3,<5.0.0)", "defusedxml (>=0.7.1,<0.8.0)", "docling-core[chunking] (>=2.73.0,<3.0.0)", "docling-ibm-models (>=3.13.0,<4)", "docling-parse (>=7.0.0,<8.0.0)", "easyocr (>=1.7,<2.0)", "httpx (>=0.28,<1.0.0)", "huggingface-hub (>=0.23,<2)", "lxml (>=4.0.0,<7.0.0)", "mail-parser (>=4.1.4,<5.0.0)", "marko (>=2.1.2,<3.0.0)", "mlx-vlm (>=0.4.3,<1.0.0) ; python_version >= \"3.10\" and sys_platform == \"darwin\" and platform_machine == \"arm64\"", "mlx-whisper (>=0.4.3) ; python_version >= \"3.10\" and sys_platform == \"darwin\" and platform_machine == \"arm64\"", "numba (>=0.63.0)", "numpy (>=1.24.0,<3.0.0)", "ocrmac (>=1.0.0,<2.0.0) ; sys_platform == \"darwin\"", "onnxruntime (<1.24) ; python_version < \"3.14\" and sys_platform == \"darwin\"", "onnxruntime-gpu (<1.24) ; python_version < \"3.14\" and (sys_platform == \"linux\" or sys_platform == \"win32\")", "openai-whisper (>=20250625)", "openpyxl (>=3.1.5,<4.0.0)", "pandas (>=2.1.4,<4.0.0)", "peft (>=0.18.1)", "pillow (>=10.0.0,<13.0.0)", "playwright (>=1.58.0)", "polyfactory (>=2.22.2)", "pylatexenc (>=2.10,<3.0)", "pypdfium2 (>=4.30.0,!=4.30.1,<6.0.0)", "python-docx (>=1.1.2,<2.0.0)", "python-dotenv (>=1.0,<2.0)", "python-pptx (>=1.0.2,<2.0.0)", "qwen-vl-utils (>=0.0.11)", "rapidocr (>=3.9.1,<4.0.0)", "rich (>=13.0.0)", "rtree (>=1.3.0,<2.0.0)", "scikit-image (>=0.19)", "scipy (>=1.6.0,<2.0.0)", "tesserocr (>=2.7.1,<3.0.0)", "torch (>=2.2.2,<3.0.0)", "torchvision (>=0,<1)", "transformers (>=4.42.0,<5.0.dev0 || >=5.4.dev0,<5.9.0) ; sys_platform == \"darwin\"", "transformers (>=4.42.0,<5.0.dev0 || >=5.4.dev0,<6.0.0) ; sys_platform != \"darwin\"", "tritonclient[grpc] (>=2.65.0,<3.0.0)", "typer (>=0.12.5,<0.27.0)", "websockets (>=14.0,<17.0)", "whisper-s2t-reborn (>=1.6.3,<2) ; sys_platform != \"darwin\" or platform_machine != \"arm64\""]
+cli = ["python-dotenv (>=1.0,<2.0)", "rich (>=13.0.0)", "typer (>=0.12.5,<0.27.0)"]
 convert-core = ["numpy (>=1.24.0,<3.0.0)", "pillow (>=10.0.0,<13.0.0)", "rtree (>=1.3.0,<2.0.0)", "scipy (>=1.6.0,<2.0.0)"]
 extract-core = ["numpy (>=1.24.0,<3.0.0)", "pillow (>=10.0.0,<13.0.0)", "polyfactory (>=2.22.2)", "rtree (>=1.3.0,<2.0.0)", "scipy (>=1.6.0,<2.0.0)"]
 feat-chunking = ["docling-core[chunking] (>=2.73.0,<3.0.0)"]
 feat-ocr-easyocr = ["easyocr (>=1.7,<2.0)", "scikit-image (>=0.19)"]
 feat-ocr-mac = ["ocrmac (>=1.0.0,<2.0.0) ; sys_platform == \"darwin\""]
-feat-ocr-rapidocr = ["rapidocr (>=3.8,<4.0.0)"]
-feat-ocr-rapidocr-onnx = ["onnxruntime (>=1.7.0,<2.0.0) ; python_version < \"3.14\"", "rapidocr (>=3.8,<4.0.0)"]
+feat-ocr-nemotron = ["nemotron-ocr (>=2.0.0) ; python_version == \"3.12\" and sys_platform == \"linux\" and platform_machine == \"x86_64\""]
+feat-ocr-rapidocr = ["rapidocr (>=3.9.1,<4.0.0)"]
+feat-ocr-rapidocr-onnx = ["onnxruntime (>=1.7.0,<2.0.0) ; python_version < \"3.14\"", "rapidocr (>=3.9.1,<4.0.0)"]
 feat-ocr-tesserocr = ["pandas (>=2.1.4,<4.0.0)", "tesserocr (>=2.7.1,<3.0.0)"]
-format-audio = ["mlx-whisper (>=0.4.3) ; python_version >= \"3.10\" and sys_platform == \"darwin\" and platform_machine == \"arm64\"", "numba (>=0.63.0)", "openai-whisper (>=20250625)"]
+format-audio = ["mlx-whisper (>=0.4.3) ; python_version >= \"3.10\" and sys_platform == \"darwin\" and platform_machine == \"arm64\"", "numba (>=0.63.0)", "openai-whisper (>=20250625)", "whisper-s2t-reborn (>=1.6.3,<2) ; sys_platform != \"darwin\" or platform_machine != \"arm64\""]
 format-docx = ["python-docx (>=1.1.2,<2.0.0)"]
+format-email = ["beautifulsoup4 (>=4.12.3,<5.0.0)", "lxml (>=4.0.0,<7.0.0)", "mail-parser (>=4.1.4,<5.0.0)"]
 format-html = ["beautifulsoup4 (>=4.12.3,<5.0.0)", "lxml (>=4.0.0,<7.0.0)"]
 format-html-render = ["playwright (>=1.58.0)"]
 format-latex = ["pylatexenc (>=2.10,<3.0)"]
 format-markdown = ["marko (>=2.1.2,<3.0.0)"]
 format-office = ["openpyxl (>=3.1.5,<4.0.0)", "python-docx (>=1.1.2,<2.0.0)", "python-pptx (>=1.0.2,<2.0.0)"]
-format-pdf = ["docling-parse (>=6.2.0,<7.0.0)", "pypdfium2 (>=4.30.0,!=4.30.1,<6.0.0)"]
-format-pdf-docling = ["docling-parse (>=6.2.0,<7.0.0)", "pypdfium2 (>=4.30.0,!=4.30.1,<6.0.0)"]
+format-opendocument = ["odfdo (>=3.22.0,<4.0.0)"]
+format-pdf = ["docling-parse (>=7.0.0,<8.0.0)", "pypdfium2 (>=4.30.0,!=4.30.1,<6.0.0)"]
+format-pdf-docling = ["docling-parse (>=7.0.0,<8.0.0)", "pypdfium2 (>=4.30.0,!=4.30.1,<6.0.0)"]
 format-pdf-pypdfium2 = ["pypdfium2 (>=4.30.0,!=4.30.1,<6.0.0)"]
 format-pptx = ["python-pptx (>=1.0.2,<2.0.0)"]
 format-web = ["beautifulsoup4 (>=4.12.3,<5.0.0)", "lxml (>=4.0.0,<7.0.0)", "marko (>=2.1.2,<3.0.0)"]
@@ -885,9 +964,9 @@ format-xml-xbrl = ["arelle-release (>=2.38.17,<3.0.0)"]
 models-local = ["accelerate (>=1.0.0,<2)", "defusedxml (>=0.7.1,<0.8.0)", "docling-ibm-models (>=3.13.0,<4)", "huggingface-hub (>=0.23,<2)", "torch (>=2.2.2,<3.0.0)", "torchvision (>=0,<1)"]
 models-onnxruntime = ["onnxruntime (<1.24) ; python_version < \"3.14\" and sys_platform == \"darwin\"", "onnxruntime-gpu (<1.24) ; python_version < \"3.14\" and (sys_platform == \"linux\" or sys_platform == \"win32\")"]
 models-remote = ["tritonclient[grpc] (>=2.65.0,<3.0.0)"]
-models-vlm-inline = ["accelerate (>=1.2.1,<2.0.0)", "mlx-vlm (>=0.4.3,<1.0.0) ; python_version >= \"3.10\" and sys_platform == \"darwin\" and platform_machine == \"arm64\"", "peft (>=0.18.1)", "qwen-vl-utils (>=0.0.11)", "transformers (>=4.42.0,<5.0.dev0 || >=5.4.dev0,<6.0.0)"]
-service-client = ["httpx (>=0.28,<1.0.0)", "websockets (>=14.0,<17.0)"]
-standard = ["accelerate (>=1.0.0,<2)", "beautifulsoup4 (>=4.12.3,<5.0.0)", "defusedxml (>=0.7.1,<0.8.0)", "docling-core[chunking] (>=2.73.0,<3.0.0)", "docling-ibm-models (>=3.13.0,<4)", "docling-parse (>=6.2.0,<7.0.0)", "httpx (>=0.28,<1.0.0)", "huggingface-hub (>=0.23,<2)", "lxml (>=4.0.0,<7.0.0)", "marko (>=2.1.2,<3.0.0)", "numpy (>=1.24.0,<3.0.0)", "openpyxl (>=3.1.5,<4.0.0)", "pillow (>=10.0.0,<13.0.0)", "polyfactory (>=2.22.2)", "pylatexenc (>=2.10,<3.0)", "pypdfium2 (>=4.30.0,!=4.30.1,<6.0.0)", "python-docx (>=1.1.2,<2.0.0)", "python-pptx (>=1.0.2,<2.0.0)", "rapidocr (>=3.8,<4.0.0)", "rich (>=13.0.0)", "rtree (>=1.3.0,<2.0.0)", "scipy (>=1.6.0,<2.0.0)", "torch (>=2.2.2,<3.0.0)", "torchvision (>=0,<1)", "typer (>=0.12.5,<0.22.0)", "websockets (>=14.0,<17.0)"]
+models-vlm-inline = ["accelerate (>=1.2.1,<2.0.0)", "mlx-vlm (>=0.4.3,<1.0.0) ; python_version >= \"3.10\" and sys_platform == \"darwin\" and platform_machine == \"arm64\"", "peft (>=0.18.1)", "qwen-vl-utils (>=0.0.11)", "transformers (>=4.42.0,<5.0.dev0 || >=5.4.dev0,<5.9.0) ; sys_platform == \"darwin\"", "transformers (>=4.42.0,<5.0.dev0 || >=5.4.dev0,<6.0.0) ; sys_platform != \"darwin\""]
+service-client = ["httpx (>=0.28,<1.0.0)", "python-dotenv (>=1.0,<2.0)", "rich (>=13.0.0)", "typer (>=0.12.5,<0.27.0)", "websockets (>=14.0,<17.0)"]
+standard = ["accelerate (>=1.0.0,<2)", "beautifulsoup4 (>=4.12.3,<5.0.0)", "defusedxml (>=0.7.1,<0.8.0)", "docling-core[chunking] (>=2.73.0,<3.0.0)", "docling-ibm-models (>=3.13.0,<4)", "docling-parse (>=7.0.0,<8.0.0)", "httpx (>=0.28,<1.0.0)", "huggingface-hub (>=0.23,<2)", "lxml (>=4.0.0,<7.0.0)", "mail-parser (>=4.1.4,<5.0.0)", "marko (>=2.1.2,<3.0.0)", "numpy (>=1.24.0,<3.0.0)", "openpyxl (>=3.1.5,<4.0.0)", "pillow (>=10.0.0,<13.0.0)", "polyfactory (>=2.22.2)", "pylatexenc (>=2.10,<3.0)", "pypdfium2 (>=4.30.0,!=4.30.1,<6.0.0)", "python-docx (>=1.1.2,<2.0.0)", "python-dotenv (>=1.0,<2.0)", "python-pptx (>=1.0.2,<2.0.0)", "rapidocr (>=3.9.1,<4.0.0)", "rich (>=13.0.0)", "rtree (>=1.3.0,<2.0.0)", "scipy (>=1.6.0,<2.0.0)", "torch (>=2.2.2,<3.0.0)", "torchvision (>=0,<1)", "typer (>=0.12.5,<0.27.0)", "websockets (>=14.0,<17.0)"]
 
 [[package]]
 name = "docx2md"
@@ -1629,6 +1708,30 @@ files = [
 ]
 
 [[package]]
+name = "isodate"
+version = "0.7.2"
+description = "An ISO 8601 date/time/duration parser and formatter"
+optional = false
+python-versions = ">=3.7"
+groups = ["main"]
+files = [
+    {file = "isodate-0.7.2-py3-none-any.whl", hash = "sha256:28009937d8031054830160fce6d409ed342816b543597cece116d966c6d99e15"},
+    {file = "isodate-0.7.2.tar.gz", hash = "sha256:4cd1aa0f43ca76f4a6c6c0292a85f40b35ec2e43e315b59f06e6d32171a953e6"},
+]
+
+[[package]]
+name = "jaconv"
+version = "0.5.0"
+description = "Pure-Python Japanese character interconverter for Hiragana, Katakana, Hankaku, Zenkaku and more"
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "jaconv-0.5.0-py3-none-any.whl", hash = "sha256:2914114fe761ca49fc7089e25e6ad4a400c26f262ffce84e13b176916b71610a"},
+    {file = "jaconv-0.5.0.tar.gz", hash = "sha256:53f6f968276846716f0f37100a6d5c7308cfa1e0c714eb41287d5bb09345c40f"},
+]
+
+[[package]]
 name = "jinja2"
 version = "3.1.6"
 description = "A very fast and expressive template engine."
@@ -1890,6 +1993,21 @@ cssselect = ["cssselect (>=0.7)"]
 html-clean = ["lxml_html_clean"]
 html5 = ["html5lib"]
 htmlsoup = ["BeautifulSoup4"]
+
+[[package]]
+name = "mail-parser"
+version = "4.4.0"
+description = "A tool that parses emails by enhancing the Python standard library, extracting all details into a comprehensive object."
+optional = false
+python-versions = "<3.15,>=3.9"
+groups = ["main"]
+files = [
+    {file = "mail_parser-4.4.0-py3-none-any.whl", hash = "sha256:46f7931817660fec4f7723e6f1722e66a9cce44c2daeacbeb9e705078379561f"},
+    {file = "mail_parser-4.4.0.tar.gz", hash = "sha256:82d2c0fa98a138620feaa87a378af2a2643b2941b2e125d7abfc65dd21094b33"},
+]
+
+[package.extras]
+outlook = ["extract-msg (>=0.54)"]
 
 [[package]]
 name = "markdown-it-py"
@@ -2399,7 +2517,7 @@ description = "CUDA profiling tools runtime libs."
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")"
+markers = "(sys_platform == \"win32\" or sys_platform == \"linux\") and platform_system == \"Linux\""
 files = [
     {file = "nvidia_cuda_cupti-13.0.85-py3-none-manylinux_2_25_aarch64.whl", hash = "sha256:796bd679890ee55fb14a94629b698b6db54bcfd833d391d5e94017dd9d7d3151"},
     {file = "nvidia_cuda_cupti-13.0.85-py3-none-manylinux_2_25_x86_64.whl", hash = "sha256:4eb01c08e859bf924d222250d2e8f8b8ff6d3db4721288cf35d14252a4d933c8"},
@@ -2427,7 +2545,7 @@ description = "CUDA Runtime native Libraries"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")"
+markers = "(sys_platform == \"win32\" or sys_platform == \"linux\") and platform_system == \"Linux\""
 files = [
     {file = "nvidia_cuda_runtime-13.0.96-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:ef9bcbe90493a2b9d810e43d249adb3d02e98dd30200d86607d8d02687c43f55"},
     {file = "nvidia_cuda_runtime-13.0.96-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:7f82250d7782aa23b6cfe765ecc7db554bd3c2870c43f3d1821f1d18aebf0548"},
@@ -2458,7 +2576,7 @@ description = "CUFFT native runtime libraries"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")"
+markers = "(sys_platform == \"win32\" or sys_platform == \"linux\") and platform_system == \"Linux\""
 files = [
     {file = "nvidia_cufft-12.0.0.61-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:2708c852ef8cd89d1d2068bdbece0aa188813a0c934db3779b9b1faa8442e5f5"},
     {file = "nvidia_cufft-12.0.0.61-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:6c44f692dce8fd5ffd3e3df134b6cdb9c2f72d99cf40b62c32dde45eea9ddad3"},
@@ -2475,7 +2593,7 @@ description = "cuFile GPUDirect libraries"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and sys_platform == \"linux\""
+markers = "sys_platform == \"linux\" and platform_system == \"Linux\""
 files = [
     {file = "nvidia_cufile-1.15.1.6-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:08a3ecefae5a01c7f5117351c64f17c7c62efa5fffdbe24fc7d298da19cd0b44"},
     {file = "nvidia_cufile-1.15.1.6-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:bdc0deedc61f548bddf7733bdc216456c2fdb101d020e1ab4b88d232d5e2f6d1"},
@@ -2488,7 +2606,7 @@ description = "CURAND native runtime libraries"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")"
+markers = "(sys_platform == \"win32\" or sys_platform == \"linux\") and platform_system == \"Linux\""
 files = [
     {file = "nvidia_curand-10.4.0.35-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:133df5a7509c3e292aaa2b477afd0194f06ce4ea24d714d616ff36439cee349a"},
     {file = "nvidia_curand-10.4.0.35-py3-none-manylinux_2_27_x86_64.whl", hash = "sha256:1aee33a5da6e1db083fe2b90082def8915f30f3248d5896bcec36a579d941bfc"},
@@ -2502,7 +2620,7 @@ description = "CUDA solver native runtime libraries"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")"
+markers = "(sys_platform == \"win32\" or sys_platform == \"linux\") and platform_system == \"Linux\""
 files = [
     {file = "nvidia_cusolver-12.0.4.66-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:02c2457eaa9e39de20f880f4bd8820e6a1cfb9f9a34f820eb12a155aa5bc92d2"},
     {file = "nvidia_cusolver-12.0.4.66-py3-none-manylinux_2_27_x86_64.whl", hash = "sha256:0a759da5dea5c0ea10fd307de75cdeb59e7ea4fcb8add0924859b944babf1112"},
@@ -2521,7 +2639,7 @@ description = "CUSPARSE native runtime libraries"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")"
+markers = "(sys_platform == \"win32\" or sys_platform == \"linux\") and platform_system == \"Linux\""
 files = [
     {file = "nvidia_cusparse-12.6.3.3-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:80bcc4662f23f1054ee334a15c72b8940402975e0eab63178fc7e670aa59472c"},
     {file = "nvidia_cusparse-12.6.3.3-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:2b3c89c88d01ee0e477cb7f82ef60a11a4bcd57b6b87c33f789350b59759360b"},
@@ -2565,7 +2683,7 @@ description = "Nvidia JIT LTO Library"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")"
+markers = "(sys_platform == \"win32\" or sys_platform == \"linux\") and platform_system == \"Linux\""
 files = [
     {file = "nvidia_nvjitlink-13.0.88-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl", hash = "sha256:13a74f429e23b921c1109976abefacc69835f2f433ebd323d3946e11d804e47b"},
     {file = "nvidia_nvjitlink-13.0.88-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:e931536ccc7d467a98ba1d8b89ff7fa7f1fa3b13f2b0069118cd7f47bff07d0c"},
@@ -2592,11 +2710,29 @@ description = "NVIDIA Tools Extension"
 optional = false
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and (sys_platform == \"linux\" or sys_platform == \"win32\")"
+markers = "(sys_platform == \"win32\" or sys_platform == \"linux\") and platform_system == \"Linux\""
 files = [
     {file = "nvidia_nvtx-13.0.85-py3-none-manylinux1_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:4936d1d6780fbe68db454f5e72a42ff64d1fd6397df9f363ae786930fd5c1cd4"},
     {file = "nvidia_nvtx-13.0.85-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:cb7780edb6b14107373c835bf8b72e7a178bac7367e23da7acb108f973f157a6"},
     {file = "nvidia_nvtx-13.0.85-py3-none-win_amd64.whl", hash = "sha256:d66ea44254dd3c6eacc300047af6e1288d2269dd072b417e0adffbf479e18519"},
+]
+
+[[package]]
+name = "odfdo"
+version = "3.22.10"
+description = "Python library for OpenDocument Format"
+optional = false
+python-versions = "<4,>=3.10"
+groups = ["main"]
+files = [
+    {file = "odfdo-3.22.10-py3-none-any.whl", hash = "sha256:235777e3ca7646d72bc18c9705863db138e25f9cf9dd51092450ca620c98786c"},
+    {file = "odfdo-3.22.10.tar.gz", hash = "sha256:e73b02abed371e802eb3db2b5a0e6f8874aa2ce9122817a446c26c1a6c1c66a4"},
+]
+
+[package.dependencies]
+lxml = [
+    {version = ">=4.9.4,<7", markers = "python_full_version >= \"3.11.0\" and python_full_version < \"3.13.0\""},
+    {version = ">=5.3.0,<7", markers = "python_full_version >= \"3.13.0\""},
 ]
 
 [[package]]
@@ -3374,6 +3510,21 @@ files = [
 tinytex = ["pytinytex"]
 
 [[package]]
+name = "pyparsing"
+version = "3.3.2"
+description = "pyparsing - Classes and methods to define and execute parsing grammars"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "pyparsing-3.3.2-py3-none-any.whl", hash = "sha256:850ba148bd908d7e2411587e247a1e4f0327839c40e2e5e6d05a007ecc69911d"},
+    {file = "pyparsing-3.3.2.tar.gz", hash = "sha256:c777f4d763f140633dcb6d8a3eda953bf7a214dc4eff598413c070bcdc117cbc"},
+]
+
+[package.extras]
+diagrams = ["jinja2", "railroad-diagrams"]
+
+[[package]]
 name = "pypdfium2"
 version = "5.9.0"
 description = "Python bindings to PDFium"
@@ -3597,19 +3748,19 @@ files = [
 
 [[package]]
 name = "rapidocr"
-version = "3.8.1"
+version = "3.9.1"
 description = "Awesome OCR Library"
 optional = false
-python-versions = "<4,>=3.6"
+python-versions = "<4,>=3.8"
 groups = ["main"]
 files = [
-    {file = "rapidocr-3.8.1-py3-none-any.whl", hash = "sha256:650044b1fbce9e6bae5cae462dcf8be754cde11e2f23fc51f65dcc08deae2c46"},
+    {file = "rapidocr-3.9.1-py3-none-any.whl", hash = "sha256:600885e4e94e0b427abad394fccb0ec1d3c9118a215ca435bf7680aeae0e292b"},
 ]
 
 [package.dependencies]
 colorlog = "*"
 numpy = ">=1.19.5,<3.0.0"
-omegaconf = "*"
+omegaconf = "!=2.2.1"
 opencv_python = ">=4.5.1.48"
 Pillow = "*"
 pyclipper = ">=1.2.0"
@@ -4686,25 +4837,80 @@ scipy = ["scipy"]
 
 [[package]]
 name = "tqdm"
-version = "4.67.3"
+version = "4.68.3"
 description = "Fast, Extensible Progress Meter"
 optional = false
-python-versions = ">=3.7"
+python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "tqdm-4.67.3-py3-none-any.whl", hash = "sha256:ee1e4c0e59148062281c49d80b25b67771a127c85fc9676d3be5f243206826bf"},
-    {file = "tqdm-4.67.3.tar.gz", hash = "sha256:7d825f03f89244ef73f1d4ce193cb1774a8179fd96f31d7e1dcde62092b960bb"},
+    {file = "tqdm-4.68.3-py3-none-any.whl", hash = "sha256:39832cc2def2789a6f29df83f172db7416cea70052c0907a57801c5f2fdccb03"},
+    {file = "tqdm-4.68.3.tar.gz", hash = "sha256:00dfa48452b6b6cfae3dd9885636c23d3422d1ec97c66d96818cbd5e0821d482"},
 ]
 
 [package.dependencies]
 colorama = {version = "*", markers = "platform_system == \"Windows\""}
 
 [package.extras]
-dev = ["nbval", "pytest (>=6)", "pytest-asyncio (>=0.24)", "pytest-cov", "pytest-timeout"]
-discord = ["requests"]
+discord = ["envwrap", "requests"]
 notebook = ["ipywidgets (>=6)"]
-slack = ["slack-sdk"]
-telegram = ["requests"]
+slack = ["envwrap", "slack-sdk"]
+telegram = ["envwrap", "requests"]
+
+[[package]]
+name = "transformers"
+version = "5.8.1"
+description = "Transformers: the model-definition framework for state-of-the-art machine learning models in text, vision, audio, and multimodal models, for both inference and training."
+optional = false
+python-versions = ">=3.10.0"
+groups = ["main"]
+markers = "sys_platform == \"darwin\""
+files = [
+    {file = "transformers-5.8.1-py3-none-any.whl", hash = "sha256:5340fb95962162cdfdae5cc91d7f8fedd92ed75216c1154c5e1f590fcf56dd0e"},
+    {file = "transformers-5.8.1.tar.gz", hash = "sha256:4dd5b6de4105725104d84fd6abd74b305f4debfc251b38c648ee5dd087cf543b"},
+]
+
+[package.dependencies]
+huggingface-hub = ">=1.5.0,<2.0"
+numpy = ">=1.17"
+packaging = ">=20.0"
+pyyaml = ">=5.1"
+regex = ">=2025.10.22"
+safetensors = ">=0.4.3"
+tokenizers = ">=0.22.0,<=0.23.0"
+tqdm = ">=4.27"
+typer = "*"
+
+[package.extras]
+accelerate = ["accelerate (>=1.1.0)"]
+all = ["Pillow (>=10.0.1,<=15.0)", "accelerate (>=1.1.0)", "av", "blobfile", "jinja2 (>=3.1.0)", "jmespath (>=1.0.1)", "kernels (>=0.12.0,<0.13)", "librosa", "mistral-common[image] (>=1.10.0)", "num2words", "phonemizer", "protobuf", "pyctcdecode (>=0.4.0)", "sentencepiece (>=0.1.91,!=0.1.92)", "tiktoken", "timm (>=1.0.23)", "torch (>=2.4)", "torchaudio", "torchvision"]
+audio = ["librosa", "phonemizer", "pyctcdecode (>=0.4.0)", "torchaudio"]
+benchmark = ["optimum-benchmark (>=0.3.0)"]
+chat-template = ["jinja2 (>=3.1.0)", "jmespath (>=1.0.1)"]
+codecarbon = ["codecarbon (>=2.8.1)"]
+deepspeed = ["accelerate (>=1.1.0)", "deepspeed (>=0.9.3)"]
+deepspeed-testing = ["GitPython (<3.1.19)", "accelerate (>=1.1.0)", "accelerate (>=1.1.0)", "beautifulsoup4", "datasets (>=2.15.0)", "datasets (>=2.15.0)", "deepspeed (>=0.9.3)", "dill (<0.3.5)", "evaluate (>=0.4.6)", "faiss-cpu", "fastapi", "filelock", "hf-doc-builder", "libcst", "mistral-common[image] (>=1.10.0)", "nltk (<=3.8.1)", "openai (>=1.98.0)", "optuna", "parameterized (>=0.9)", "protobuf", "protobuf", "psutil", "pydantic (>=2)", "pytest (>=7.2.0,<9.0.0)", "pytest-asyncio (>=1.2.0)", "pytest-env", "pytest-order", "pytest-random-order", "pytest-rerunfailures (<16.0)", "pytest-rich", "pytest-timeout", "pytest-xdist", "rich", "rich", "rjieba", "rouge-score (!=0.0.7,!=0.0.8,!=0.1,!=0.1.1)", "ruff (==0.14.10)", "sacrebleu (>=1.4.12,<2.0.0)", "sacremoses", "sentencepiece (>=0.1.91,!=0.1.92)", "sentencepiece (>=0.1.91,!=0.1.92)", "starlette", "tensorboard", "timeout-decorator", "tomli", "torch (>=2.4)", "transformers-mlinter (==0.1.1)", "ty (==0.0.20)", "urllib3 (<2.0.0)", "uvicorn"]
+dev = ["GitPython (<3.1.19)", "Pillow (>=10.0.1,<=15.0)", "accelerate (>=1.1.0)", "accelerate (>=1.1.0)", "av", "beautifulsoup4", "blobfile", "datasets (>=2.15.0)", "datasets (>=2.15.0)", "dill (<0.3.5)", "evaluate (>=0.4.6)", "faiss-cpu", "fastapi", "filelock", "fugashi (>=1.0)", "hf-doc-builder", "ipadic (>=1.0.0,<2.0)", "jinja2 (>=3.1.0)", "jmespath (>=1.0.1)", "kernels (>=0.12.0,<0.13)", "libcst", "librosa", "mistral-common[image] (>=1.10.0)", "mistral-common[image] (>=1.10.0)", "nltk (<=3.8.1)", "num2words", "openai (>=1.98.0)", "parameterized (>=0.9)", "phonemizer", "protobuf", "protobuf", "psutil", "pyctcdecode (>=0.4.0)", "pydantic (>=2)", "pytest (>=7.2.0,<9.0.0)", "pytest-asyncio (>=1.2.0)", "pytest-env", "pytest-order", "pytest-random-order", "pytest-rerunfailures (<16.0)", "pytest-rich", "pytest-timeout", "pytest-xdist", "rhoknp (>=1.1.0,<1.3.1)", "rich", "rich", "rjieba", "rouge-score (!=0.0.7,!=0.0.8,!=0.1,!=0.1.1)", "ruff (==0.14.10)", "sacrebleu (>=1.4.12,<2.0.0)", "sacremoses", "scikit-learn", "sentencepiece (>=0.1.91,!=0.1.92)", "sentencepiece (>=0.1.91,!=0.1.92)", "starlette", "sudachidict_core (>=20220729)", "sudachipy (>=0.6.6)", "tensorboard", "tiktoken", "timeout-decorator", "timm (>=1.0.23)", "tomli", "torch (>=2.4)", "torch (>=2.4)", "torchaudio", "torchvision", "transformers-mlinter (==0.1.1)", "ty (==0.0.20)", "unidic (>=1.0.2)", "unidic_lite (>=1.0.7)", "urllib3 (<2.0.0)", "uvicorn"]
+docs = ["hf-doc-builder"]
+integrations = ["codecarbon (>=2.8.1)", "kernels (>=0.12.0,<0.13)", "optuna", "ray[tune] (>=2.7.0)"]
+ja = ["fugashi (>=1.0)", "ipadic (>=1.0.0,<2.0)", "rhoknp (>=1.1.0,<1.3.1)", "sudachidict_core (>=20220729)", "sudachipy (>=0.6.6)", "unidic (>=1.0.2)", "unidic_lite (>=1.0.7)"]
+kernels = ["kernels (>=0.12.0,<0.13)"]
+mistral-common = ["mistral-common[image] (>=1.10.0)"]
+num2words = ["num2words"]
+open-telemetry = ["opentelemetry-api", "opentelemetry-exporter-otlp", "opentelemetry-sdk"]
+optuna = ["optuna"]
+quality = ["GitPython (<3.1.19)", "datasets (>=2.15.0)", "libcst", "rich", "ruff (==0.14.10)", "tomli", "transformers-mlinter (==0.1.1)", "ty (==0.0.20)", "urllib3 (<2.0.0)"]
+ray = ["ray[tune] (>=2.7.0)"]
+retrieval = ["datasets (>=2.15.0)", "faiss-cpu"]
+sagemaker = ["sagemaker (>=2.31.0)"]
+sentencepiece = ["protobuf", "sentencepiece (>=0.1.91,!=0.1.92)"]
+serving = ["accelerate (>=1.1.0)", "fastapi", "openai (>=1.98.0)", "pydantic (>=2)", "rich", "starlette", "torch (>=2.4)", "uvicorn"]
+sklearn = ["scikit-learn"]
+testing = ["GitPython (<3.1.19)", "accelerate (>=1.1.0)", "beautifulsoup4", "datasets (>=2.15.0)", "datasets (>=2.15.0)", "dill (<0.3.5)", "evaluate (>=0.4.6)", "faiss-cpu", "fastapi", "filelock", "hf-doc-builder", "libcst", "mistral-common[image] (>=1.10.0)", "nltk (<=3.8.1)", "openai (>=1.98.0)", "parameterized (>=0.9)", "protobuf", "psutil", "pydantic (>=2)", "pytest (>=7.2.0,<9.0.0)", "pytest-asyncio (>=1.2.0)", "pytest-env", "pytest-order", "pytest-random-order", "pytest-rerunfailures (<16.0)", "pytest-rich", "pytest-timeout", "pytest-xdist", "rich", "rich", "rjieba", "rouge-score (!=0.0.7,!=0.0.8,!=0.1,!=0.1.1)", "ruff (==0.14.10)", "sacrebleu (>=1.4.12,<2.0.0)", "sacremoses", "sentencepiece (>=0.1.91,!=0.1.92)", "starlette", "tensorboard", "timeout-decorator", "tomli", "torch (>=2.4)", "transformers-mlinter (==0.1.1)", "ty (==0.0.20)", "urllib3 (<2.0.0)", "uvicorn"]
+tiktoken = ["blobfile", "tiktoken"]
+timm = ["timm (>=1.0.23)"]
+torch = ["accelerate (>=1.1.0)", "torch (>=2.4)"]
+video = ["av"]
+vision = ["Pillow (>=10.0.1,<=15.0)", "torchvision"]
 
 [[package]]
 name = "transformers"
@@ -4713,6 +4919,7 @@ description = "Transformers: the model-definition framework for state-of-the-art
 optional = false
 python-versions = ">=3.10.0"
 groups = ["main"]
+markers = "sys_platform != \"darwin\""
 files = [
     {file = "transformers-5.9.0-py3-none-any.whl", hash = "sha256:1d19509bcff7028ebc6b277d71caa712e8353778463d38764237d14b42b52788"},
     {file = "transformers-5.9.0.tar.gz", hash = "sha256:25997cb8fa6053533171634b6162d7df54346530ec2aa9b42bb834e63668c842"},
@@ -4928,6 +5135,18 @@ tests = ["autopep8", "isort", "llnl-hatchet", "numpy", "pytest", "pytest-forked"
 tutorials = ["matplotlib", "pandas", "tabulate"]
 
 [[package]]
+name = "truststore"
+version = "0.10.4"
+description = "Verify certificates using native system trust stores"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "truststore-0.10.4-py3-none-any.whl", hash = "sha256:adaeaecf1cbb5f4de3b1959b42d41f6fab57b2b1666adb59e89cb0b53361d981"},
+    {file = "truststore-0.10.4.tar.gz", hash = "sha256:9d91bd436463ad5e4ee4aba766628dd6cd7010cf3e2461756b3303710eebc301"},
+]
+
+[[package]]
 name = "typer"
 version = "0.21.2"
 description = "Typer, build great CLIs. Easy to code. Based on Python type hints."
@@ -4979,7 +5198,7 @@ description = "Provider of IANA time zone data"
 optional = false
 python-versions = ">=2"
 groups = ["main"]
-markers = "sys_platform == \"win32\" or sys_platform == \"emscripten\" or platform_system == \"Windows\""
+markers = "platform_system == \"Windows\" or sys_platform == \"win32\" or sys_platform == \"emscripten\""
 files = [
     {file = "tzdata-2026.2-py2.py3-none-any.whl", hash = "sha256:bbe9af844f658da81a5f95019480da3a89415801f6cc966806612cc7169bffe7"},
     {file = "tzdata-2026.2.tar.gz", hash = "sha256:9173fde7d80d9018e02a662e168e5a2d04f87c41ea174b139fbef642eda62d10"},
@@ -5036,7 +5255,7 @@ description = "Fast implementation of asyncio event loop on top of libuv"
 optional = false
 python-versions = ">=3.8.1"
 groups = ["main"]
-markers = "sys_platform != \"win32\" and sys_platform != \"cygwin\" and platform_python_implementation != \"PyPy\""
+markers = "platform_python_implementation != \"PyPy\" and sys_platform != \"win32\" and sys_platform != \"cygwin\""
 files = [
     {file = "uvloop-0.22.1-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:ef6f0d4cc8a9fa1f6a910230cd53545d9a14479311e87e3cb225495952eb672c"},
     {file = "uvloop-0.22.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:7cd375a12b71d33d46af85a3343b35d98e8116134ba404bd657b3b1d15988792"},
@@ -5462,4 +5681,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.14"
-content-hash = "61dcf6b96b1444baa51ac4fd3a233d0df700120d589fb83701e5fb65351ac659"
+content-hash = "d619fa4106d6d5ab21f1f77cdf256f4fa5ac874b40f4eeb561937de3ea530b5a"

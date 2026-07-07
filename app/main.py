@@ -14,7 +14,14 @@ from api.routers import routers
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize shared resources for request handling and background tasks."""
-    logger.info("Запуск сервиса document-parser")
+    GREETINGS = r"""
+     __                             __
+ ___/ /__  ______ ____ _  ___ ___  / /________  ___ ________ ___ ____
+/ _  / _ \/ __/ // /  ' \/ -_) _ \/ __/___/ _ \/ _ `/ __(_-</ -_) __/
+\_,_/\___/\__/\_,_/_/_/_/\__/_//_/\__/   / .__/\_,_/_/ /___/\__/_/
+                                        /_/
+    """
+    logger.info(GREETINGS)
     app.state.executor = ProcessPoolExecutor(max_workers=settings.PARSER_WORKERS)
     yield
     logger.info("Остановка сервиса document-parser")
@@ -23,7 +30,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Document Parser",
     lifespan=lifespan,
-    version="0.10.0-without-wh",
+    version="0.11.0-wh",
     summary=(
         "Сервис для парсинга документов, OCR по изображениям и перевода "
         "документов в синхронном и асинхронном режимах."
