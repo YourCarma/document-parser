@@ -2,7 +2,7 @@ FROM nvidia/cuda:13.1.1-devel-ubuntu24.04 AS builder
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    POETRY_VERSION=2.0.1 \
+    POETRY_VERSION=2.3.2 \
     POETRY_VIRTUALENVS_IN_PROJECT=true \
     POETRY_NO_INTERACTION=1 \
     POETRY_REQUESTS_TIMEOUT=120 \
@@ -39,8 +39,12 @@ WORKDIR /document-parser
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
+    curl \
+    ca-certificates \
     ffmpeg \
     libmagic1 \
+    libxml2 \
+    libxslt1.1 \
     poppler-utils \
     antiword \
     unrtf \
