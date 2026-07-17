@@ -9,13 +9,24 @@ from settings import settings
 class WatchtowerService:
     """Клиент для загрузки файлов и получения share-ссылок в watchtower."""
 
-    def __init__(self, base_url: str):
+    def __init__(
+        self,
+        base_url: str,
+        session: aiohttp.ClientSession | None = None,
+    ):
         self.base_url = base_url
+        self.session = session
+
+    async def _with_session(self, operation):
+        if self.session is not None:
+            return await operation(self.session)
+        async with aiohttp.ClientSession() as session:
+            return await operation(session)
 
     async def create_folder(self, bucket: str, prefix: str):
         """Создать placeholder-папку в bucket, если backend этого требует."""
         prefix = self.encode_path(prefix)
-        async with aiohttp.ClientSession() as session:
+        async def request(session: aiohttp.ClientSession):
             async with session.post(
                 f"{self.base_url}/api/v1/cloud/{bucket}/folder",
                 json={"prefix": prefix},
@@ -32,6 +43,7 @@ class WatchtowerService:
                     prefix,
                     resp.status,
                 )
+        await self._with_session(request)
 
     async def upload_file(
         self,
@@ -43,7 +55,7 @@ class WatchtowerService:
         """Загрузить локальный файл в bucket и вернуть object key."""
         encoded_filename = self.encode_path(filename)
         encoded_prefix = self.encode_path(prefix)
-        async with aiohttp.ClientSession() as session:
+        async def request(session: aiohttp.ClientSession):
             with open(local_path, "rb") as f:
                 form = aiohttp.FormData()
                 if encoded_prefix:
@@ -70,6 +82,7 @@ class WatchtowerService:
                         encoded_prefix,
                         encoded_filename,
                     )
+        await self._with_session(request)
         if encoded_prefix:
             return f"{encoded_prefix}/{encoded_filename}"
         return encoded_filename
@@ -81,7 +94,7 @@ class WatchtowerService:
         expired_secs: int = 3600 * 24 * 7,
     ) -> str:
         """Получить pre-signed share-ссылку для файла в bucket."""
-        async with aiohttp.ClientSession() as session:
+        async def request(session: aiohttp.ClientSession):
             async with session.post(
                 f"{self.base_url}/api/v1/cloud/{bucket}/file/share",
                 json={"file_path": file_path, "expired_secs": expired_secs},
@@ -101,6 +114,7 @@ class WatchtowerService:
                     file_path,
                 )
                 return url
+        return await self._with_session(request)
 
     @staticmethod
     def encode_path(path: str) -> str:

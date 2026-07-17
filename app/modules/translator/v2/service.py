@@ -8,12 +8,12 @@ import pypandoc
 from docling_core.types.doc import DoclingDocument, TableItem, TextItem
 from loguru import logger
 
-from modules.parser.v1.abc.factory import ParserFactory
 from modules.parser.v1.schemas import ParserMods, ParserParams
-from modules.parser.v1.utils import delete_file, run_in_process
+from modules.parser.v1.utils import delete_file, parse_document, run_in_process
 from modules.resource_manager.service import ResourceManagerService
 from modules.translator.v1.exceptions import LanguageNotSupported
 from modules.translator.v1.service import CustomModelTranslator
+from modules.translator.v1.utils import RetryableUpstreamError
 from modules.translator.v2.schemas import TranslatorResponseData
 from modules.watchtower.service import WatchtowerService
 from modules.webhook_manager.schemas import TaskStatus
@@ -43,10 +43,14 @@ class TranslatorV2Service:
         webhook: WebhookManagerService,
         watchtower: WatchtowerService,
         resource_manager: ResourceManagerService,
+        translation_semaphore: asyncio.Semaphore | None = None,
+        parser_semaphore: asyncio.Semaphore | None = None,
     ):
         self.webhook = webhook
         self.watchtower = watchtower
         self.resource_manager = resource_manager
+        self.translation_semaphore = translation_semaphore
+        self.parser_semaphore = parser_semaphore
 
     async def run_translation_task(
         self,
@@ -109,9 +113,12 @@ class TranslatorV2Service:
                 task_id,
                 original_filename,
             )
-            parser = ParserFactory(parser_params).get_parser()
             docling_doc: DoclingDocument = await run_in_process(
-                parser.parse, executor, ParserMods.TO_DOCLING
+                parse_document,
+                executor,
+                parser_params,
+                ParserMods.TO_DOCLING,
+                semaphore=self.parser_semaphore,
             )
             await self._update(
                 task_key, response_data, 15, TaskStatus.PROCESSING,
@@ -124,7 +131,9 @@ class TranslatorV2Service:
                 source_language=source_language,
                 target_language=target_language,
                 include_image_in_output=False,
-                max_concurrency=settings.TRANSALTOR_MAX_CONCURRENCY,
+                max_concurrency=settings.TRANSLATOR_MAX_CONCURRENCY,
+                shared_semaphore=self.translation_semaphore,
+                http_session=self.webhook.session,
             )
             translated_path = await self._translate_with_progress(
                 translator, docling_doc, task_key, response_data
@@ -156,11 +165,23 @@ class TranslatorV2Service:
                 current_stage,
                 exc,
             )
-            response_data.error = str(exc)
-            await self._update(
-                task_key, response_data, 0, TaskStatus.ERROR,
-                _stage_to_user_message(current_stage),
-            )
+            public_error = _stage_to_user_message(current_stage)
+            response_data.error = public_error
+            try:
+                await self._update(
+                    task_key,
+                    response_data,
+                    0,
+                    TaskStatus.ERROR,
+                    public_error,
+                )
+            except Exception as update_exc:
+                logger.error(
+                    "TranslatorV2: не удалось опубликовать "
+                    "ошибку task_id='{}': {}",
+                    task_id,
+                    update_exc,
+                )
         finally:
             await delete_file(file_path)
             if translated_path:
@@ -237,12 +258,12 @@ class TranslatorV2Service:
 
         completed = [0]
         update_every = max(1, total // 20)
-        progress_tasks: list[asyncio.Task] = []
+        progress_lock = asyncio.Lock()
 
         async def translate_tracked(text: str) -> str:
             try:
                 return await translator.translate_element_limited(text)
-            except TimeoutError:
+            except (TimeoutError, RetryableUpstreamError):
                 logger.warning(
                     "TranslatorV2: timeout при переводе элемента key='{}', оставляю оригинальный текст",
                     task_key,
@@ -267,32 +288,50 @@ class TranslatorV2Service:
                         await self.webhook.update_progress(task_key, p, TaskStatus.PROCESSING)
                         await self.webhook.update_response_data(task_key, s)
 
-                    progress_tasks.append(asyncio.create_task(_send()))
+                    async with progress_lock:
+                        try:
+                            await _send()
+                        except Exception as exc:
+                            logger.warning(
+                                "TranslatorV2: не удалось обновить "
+                                "прогресс key='{}': {}",
+                                task_key,
+                                exc,
+                            )
 
         if text_elements:
-            results = await asyncio.gather(
-                *[translate_tracked(el.text) for el in text_elements]
+            await self._translate_in_batches(
+                text_elements,
+                lambda element: element.text,
+                lambda element, translated: setattr(
+                    element, "text", translated.replace("`", "*")
+                ),
+                translate_tracked,
             )
-            for el, translated in zip(text_elements, results):
-                el.text = translated.replace("`", "*")
 
         if cell_items:
-            results = await asyncio.gather(
-                *[translate_tracked(cell.text) for cell in cell_items]
+            await self._translate_in_batches(
+                cell_items,
+                lambda cell: cell.text,
+                lambda cell, translated: setattr(
+                    cell, "text", translated.replace("`", "*")
+                ),
+                translate_tracked,
             )
-            for cell, translated in zip(cell_items, results):
-                cell.text = translated.replace("`", "*")
-
-        if progress_tasks:
-            logger.debug(
-                "TranslatorV2: ожидание отложенных обновлений key='{}' pending={}",
-                task_key,
-                len(progress_tasks),
-            )
-            await asyncio.gather(*progress_tasks, return_exceptions=True)
-            logger.debug("TranslatorV2: все отложенные обновления завершены key='{}'", task_key)
 
         return await self._export_to_word(translator, docling_doc)
+
+    @staticmethod
+    async def _translate_in_batches(items, get_text, set_text, translate):
+        """Переводить без создания корутины на каждый элемент сразу."""
+        batch_size = max(1, settings.TRANSLATOR_MAX_CONCURRENCY)
+        for start in range(0, len(items), batch_size):
+            batch = items[start : start + batch_size]
+            results = await asyncio.gather(
+                *(translate(get_text(item)) for item in batch)
+            )
+            for item, translated in zip(batch, results):
+                set_text(item, translated)
 
     @staticmethod
     async def _export_to_word(
@@ -300,6 +339,17 @@ class TranslatorV2Service:
         docling_doc: DoclingDocument,
     ) -> str:
         """Экспортировать переведённый `DoclingDocument` во временный `.docx`."""
+        return await asyncio.to_thread(
+            TranslatorV2Service._export_to_word_sync,
+            translator,
+            docling_doc,
+        )
+
+    @staticmethod
+    def _export_to_word_sync(
+        translator: CustomModelTranslator,
+        docling_doc: DoclingDocument,
+    ) -> str:
         artifacts_dir = Path(tempfile.mkdtemp(prefix="artifacts_"))
         try:
             doc_with_refs = docling_doc._make_copy_with_refmode(

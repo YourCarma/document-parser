@@ -1,4 +1,6 @@
 import uvicorn
+import asyncio
+import aiohttp
 from fastapi import FastAPI
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,9 +25,32 @@ async def lifespan(app: FastAPI):
     """
     logger.info(GREETINGS)
     app.state.executor = ProcessPoolExecutor(max_workers=settings.PARSER_WORKERS)
-    yield
-    logger.info("Остановка сервиса document-parser")
-    app.state.executor.shutdown()
+    app.state.parser_semaphore = asyncio.Semaphore(settings.PARSER_WORKERS)
+    app.state.translation_semaphore = asyncio.Semaphore(
+        settings.TRANSLATOR_MAX_CONCURRENCY,
+    )
+    timeout = aiohttp.ClientTimeout(
+        total=None,
+        connect=settings.EXTERNAL_CONNECT_TIMEOUT_SECS,
+        sock_read=settings.EXTERNAL_READ_TIMEOUT_SECS,
+    )
+    connector = aiohttp.TCPConnector(
+        limit=settings.EXTERNAL_HTTP_CONNECTION_LIMIT,
+    )
+    app.state.http_session = aiohttp.ClientSession(
+        timeout=timeout,
+        connector=connector,
+    )
+    try:
+        yield
+    finally:
+        logger.info("Остановка сервиса document-parser")
+        await app.state.http_session.close()
+        await asyncio.to_thread(
+            app.state.executor.shutdown,
+            wait=True,
+            cancel_futures=True,
+        )
 
 app = FastAPI(
     title="Document Parser",
@@ -85,12 +110,10 @@ app = FastAPI(
 
 
 
-origins = ["*"]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
     allow_methods=["*"],
     allow_headers=["*"],
 )

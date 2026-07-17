@@ -1,10 +1,8 @@
-from typing import Optional, Union
-import enum
-from pathlib import Path
+from typing import Optional
 
 from iso639 import Lang
 from pydantic import BaseModel, field_validator, Field
-from fastapi import UploadFile, File, status
+from fastapi import UploadFile, File
 from loguru import logger
 
 from settings import settings
@@ -39,17 +37,17 @@ class TranslatorRequest(BaseModel):
     )
 
     @field_validator('source_language', 'target_language', mode="after")
-    def convert_to_iso639(cls, lang: str) -> str:
+    def convert_to_iso639(cls, lang: Optional[str]) -> Optional[str]:
+        if lang is None:
+            return None
         lang = lang.strip()
         if lang == "auto":
             return lang
-        if lang is None:
-            return None
         if len(lang) == 2 and lang.isalpha():
             try:
                 Lang(lang)
                 return lang.lower()
-            except:
+            except Exception:
                 pass
         try:
             lang = Lang(lang)

@@ -7,12 +7,26 @@ from loguru import logger
 class ResourceManagerService:
     """Клиент resource_manager для поиска пользовательского bucket."""
 
-    def __init__(self, base_url: str):
+    def __init__(
+        self,
+        base_url: str,
+        session: aiohttp.ClientSession | None = None,
+    ):
         self.base_url = base_url
+        self.session = session
 
     async def get_user_bucket(self, user_id: str) -> Optional[str]:
         """Вернуть `external_id` первого ресурса типа `Document` для пользователя."""
+        if self.session is not None:
+            return await self._get_user_bucket(self.session, user_id)
         async with aiohttp.ClientSession() as session:
+            return await self._get_user_bucket(session, user_id)
+
+    async def _get_user_bucket(
+        self,
+        session: aiohttp.ClientSession,
+        user_id: str,
+    ) -> Optional[str]:
             async with session.get(
                 f"{self.base_url}/api/v1/resource/",
                 headers={"x-user-id": user_id},

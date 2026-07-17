@@ -33,14 +33,11 @@ class ParserABC(ABC):
         try:
             doc = self.converter.convert(file_path).document
             logger.debug("Standard Docling conversion completed")
-            for item in doc.iterate_items(traverse_pictures=True):
-                logger.warning(item)
             markdown = doc.export_to_markdown()
-            logger.debug(markdown)
             return markdown
         except Exception as e:
             logger.error(f"Error converting document with Docling: {e}")
-            raise e
+            raise
         
     def to_utf8(self, text: str):
         

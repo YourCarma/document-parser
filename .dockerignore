@@ -3,3 +3,9 @@ ml/
 test_data
 docs
 __pycache__
+.env
+.env.*
+!.env.example
+.git
+.venv
+tests/

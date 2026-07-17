@@ -3,52 +3,87 @@ import tempfile
 import os
 from typing import Union, Optional
 import asyncio
-import aiofiles
-from aiofiles.os import remove as aioremove
 import subprocess
 
 from loguru import logger
 from fastapi import UploadFile
+from starlette.background import BackgroundTask
 
-from modules.parser.v1.schemas import ConvertationOutputs
+from modules.parser.v1.schemas import ConvertationOutputs, ParserMods, ParserParams
+
+
+UPLOAD_CHUNK_SIZE = 1024 * 1024
 
 
 async def save_file(file: UploadFile) -> Path:
-    temp_path = None
+    temp_path: Optional[Path] = None
+    descriptor: int | None = None
     try:
-        temp_dir = tempfile.gettempdir()
-        original_filename = file.filename
-        
-        file_stem = Path(original_filename).stem
-        file_suffix = Path(original_filename).suffix
-        
-        temp_path = os.path.join(temp_dir, original_filename)
-        
-        counter = 1
-        while os.path.exists(temp_path):
-            new_filename = f"{file_stem}_{counter}{file_suffix}"
-            temp_path = os.path.join(temp_dir, new_filename)
-            counter += 1
-        
-        content = await file.read()
-        
-        async with aiofiles.open(temp_path, 'wb') as f:
-            await f.write(content)
+        # Only the suffix is retained from the untrusted client filename. The
+        # operating system creates the destination atomically, so concurrent
+        # uploads with identical names cannot overwrite each other.
+        file_suffix = Path(file.filename or "").suffix
+        descriptor, raw_temp_path = tempfile.mkstemp(
+            prefix="document_parser_",
+            suffix=file_suffix,
+            dir=tempfile.gettempdir(),
+        )
+        temp_path = Path(raw_temp_path)
+
+        # Reuse the atomically-created descriptor. Writes remain bounded by the
+        # chunk size, so even large uploads are never accumulated in memory.
+        with os.fdopen(descriptor, "wb") as destination:
+            descriptor = None
+            while chunk := await file.read(UPLOAD_CHUNK_SIZE):
+                destination.write(chunk)
 
         logger.success(f"File saved at: {temp_path}")
-        return Path(temp_path)
+        return temp_path
     except Exception as e:
         logger.error(f"Error saving_file: {e}")
+        if descriptor is not None:
+            os.close(descriptor)
         await delete_file(temp_path)
         raise
 
-async def delete_file(file_path: Path):
+async def delete_file(file_path: Union[Path, str, None]) -> None:
+    if file_path is None:
+        return
+
     try:
         logger.debug(f"Deleting \"{file_path}\" file")
-        await aioremove(file_path)
+        # unlink is a small metadata operation and safe to perform inline.
+        Path(file_path).unlink()
         logger.success(f"File \"{file_path}\" succesfully deleted!")
+    except FileNotFoundError:
+        logger.debug(f"File \"{file_path}\" has already been deleted")
     except Exception as e:
         logger.error(f"Error on deleting \"{file_path}\" file: {e}")
+
+
+def file_cleanup_task(file_path: Union[Path, str]) -> BackgroundTask:
+    """Create cleanup which runs after a streaming response is sent."""
+    return BackgroundTask(delete_file, file_path)
+
+
+def parse_document(parser_params: ParserParams, mode: ParserMods):
+    """Build and execute a parser in a worker process.
+
+    The local import avoids a module cycle: the factory itself uses conversion
+    helpers from this module. Keeping this function at module level also makes
+    it picklable by ``ProcessPoolExecutor``.
+    """
+    from modules.parser.v1.abc.factory import ParserFactory
+
+    original_path = Path(parser_params.file_path)
+    parser = ParserFactory(parser_params).get_parser()
+    converted_path = Path(parser_params.file_path)
+    try:
+        return parser.parse(mode)
+    finally:
+        if converted_path != original_path:
+            converted_path.unlink(missing_ok=True)
+
 
 def read_file_content(file_path: Path):
     try:
@@ -58,9 +93,12 @@ def read_file_content(file_path: Path):
     except Exception as e:
         logger.error(f"Error on deleting \"{file_path}\" file: {e}")
 
-async def run_in_process(fn, app_executor, *args):
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(app_executor, fn, *args)
+async def run_in_process(fn, app_executor, *args, semaphore=None):
+    loop = asyncio.get_running_loop()
+    if semaphore is None:
+        return await loop.run_in_executor(app_executor, fn, *args)
+    async with semaphore:
+        return await loop.run_in_executor(app_executor, fn, *args)
 
 def convert_doc_to(
     input_file_path: Union[Path, str],

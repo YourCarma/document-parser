@@ -1,10 +1,10 @@
 from typing import List
 from pathlib import Path
-from dotenv import load_dotenv
 import os
 import multiprocessing
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import AliasChoices, Field
 
 
 class Settings(BaseSettings):
@@ -29,7 +29,13 @@ class Settings(BaseSettings):
     
     
     DETECT_LANGUAGE_URL: str = "http://localhost:10015/api/v1/detect_language"
-    TRANSALTOR_MAX_CONCURRENCY: int = 15
+    TRANSALTOR_MAX_CONCURRENCY: int = Field(
+        default=15,
+        validation_alias=AliasChoices(
+            "TRANSLATOR_MAX_CONCURRENCY",
+            "TRANSALTOR_MAX_CONCURRENCY",
+        ),
+    )
 
     WEBHOOK_MANAGER_URL: str = "http://localhost:8010"
     WATCHTOWER_URL: str = "http://localhost:8020"
@@ -38,6 +44,12 @@ class Settings(BaseSettings):
     RESOURCE_MANAGER_URL: str = "http://localhost:8030"
 
     POST_REQUEST_TIMEOUT: int = 100
+    EXTERNAL_CONNECT_TIMEOUT_SECS: float = 10.0
+    EXTERNAL_READ_TIMEOUT_SECS: float = 100.0
+    EXTERNAL_HTTP_CONNECTION_LIMIT: int = 100
+
+    CORS_ORIGINS: List[str] = ["*"]
+    CORS_ALLOW_CREDENTIALS: bool = True
     
     
     ALLOWED_MIME_TYPES: List[str] = [
@@ -70,6 +82,11 @@ class Settings(BaseSettings):
     @property
     def TRANSLATOR_TRANSLATE_URL(cls):
         return f"{cls.TRANSLATOR_ADDRESS}{cls.TRANSLATE_URI}"
+
+    @property
+    def TRANSLATOR_MAX_CONCURRENCY(self) -> int:
+        """Correctly-spelled alias; the legacy env name remains supported."""
+        return self.TRANSALTOR_MAX_CONCURRENCY
     
     @property
     def ARTIFACTS_PATH(cls):

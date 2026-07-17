@@ -4,9 +4,14 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import FileResponse
 from loguru import logger
 
-from modules.parser.v1.abc.factory import ParserFactory
 from modules.parser.v1.schemas import FileFormats, ParserMods, ParserParams
-from modules.parser.v1.utils import delete_file, run_in_process, save_file
+from modules.parser.v1.utils import (
+    delete_file,
+    file_cleanup_task,
+    parse_document,
+    run_in_process,
+    save_file,
+)
 from modules.translator.v1.schemas import TranslatorRequest, TranslatorTextResponse
 from modules.translator.v1.service import CustomModelTranslator
 from settings import settings
@@ -52,6 +57,7 @@ async def translate_file_to_text(
     request_fastapi: Request,
     translator_data: TranslatorRequest = Depends(),
 ) -> TranslatorTextResponse:
+    file_path: Path | None = None
     try:
         source_language = translator_data.source_language
         target_language = translator_data.target_language
@@ -69,23 +75,31 @@ async def translate_file_to_text(
             full_vlm_pdf_parse=translator_data.full_vlm_pdf_parse,
         )
 
-        parser = ParserFactory(parser_params).get_parser()
         parsed = await run_in_process(
-            parser.parse,
+            parse_document,
             request_fastapi.app.state.executor,
+            parser_params,
             ParserMods.TO_DOCLING,
+            semaphore=request_fastapi.app.state.parser_semaphore,
         )
         translator = CustomModelTranslator(
             parsed,
             source_language,
             target_language,
             translator_data.include_image_in_output,
+            max_concurrency=settings.TRANSLATOR_MAX_CONCURRENCY,
+            shared_semaphore=getattr(
+                request_fastapi.app.state,
+                "translation_semaphore",
+                None,
+            ),
+            http_session=getattr(request_fastapi.app.state, "http_session", None),
         )
         translated = await translator.translate_docling(ParserMods.TO_TEXT, parsed)
         return TranslatorTextResponse(parsed_text=translated)
     except Exception as e:
         logger.error(f"Ошибка синхронного перевода в текст: {e}")
-        raise e
+        raise
     finally:
         await delete_file(file_path)
 
@@ -128,6 +142,8 @@ async def translate_file_to_file(
     request_fastapi: Request,
     translator_data: TranslatorRequest = Depends(),
 ):
+    file_path: Path | None = None
+    translated_path: str | None = None
     try:
         source_language = translator_data.source_language
         target_language = translator_data.target_language
@@ -137,6 +153,7 @@ async def translate_file_to_file(
             target_language,
         )
         file = translator_data.file
+        download_stem = Path(file.filename or "document").stem
         file_path = await save_file(file)
         parser_params = ParserParams(
             file_path=file_path,
@@ -145,26 +162,37 @@ async def translate_file_to_file(
             full_vlm_pdf_parse=translator_data.full_vlm_pdf_parse,
         )
 
-        parser = ParserFactory(parser_params).get_parser()
         parsed = await run_in_process(
-            parser.parse,
+            parse_document,
             request_fastapi.app.state.executor,
+            parser_params,
             ParserMods.TO_DOCLING,
+            semaphore=request_fastapi.app.state.parser_semaphore,
         )
         translator = CustomModelTranslator(
             parsed,
             source_language,
             target_language,
             translator_data.include_image_in_output,
+            max_concurrency=settings.TRANSLATOR_MAX_CONCURRENCY,
+            shared_semaphore=getattr(
+                request_fastapi.app.state,
+                "translation_semaphore",
+                None,
+            ),
+            http_session=getattr(request_fastapi.app.state, "http_session", None),
         )
         translated_path = await translator.translate_docling(ParserMods.TO_FILE, parsed)
         return FileResponse(
             path=translated_path,
-            filename=f"{Path(file_path).stem}(переведенный).md",
+            filename=f"{download_stem}(переведенный).md",
+            background=file_cleanup_task(translated_path),
         )
     except Exception as e:
         logger.error(f"Ошибка синхронного перевода в .md: {e}")
-        raise e
+        if translated_path is not None:
+            await delete_file(translated_path)
+        raise
     finally:
         await delete_file(file_path)
 
@@ -207,6 +235,8 @@ async def translate_file_to_word(
     request_fastapi: Request,
     translator_data: TranslatorRequest = Depends(),
 ):
+    file_path: Path | None = None
+    translated_path: str | None = None
     try:
         source_language = translator_data.source_language
         target_language = translator_data.target_language
@@ -216,6 +246,7 @@ async def translate_file_to_word(
             target_language,
         )
         file = translator_data.file
+        download_stem = Path(file.filename or "document").stem
         file_path = await save_file(file)
         parser_params = ParserParams(
             file_path=file_path,
@@ -224,26 +255,36 @@ async def translate_file_to_word(
             full_vlm_pdf_parse=translator_data.full_vlm_pdf_parse,
         )
 
-        parser = ParserFactory(parser_params).get_parser()
         parsed = await run_in_process(
-            parser.parse,
+            parse_document,
             request_fastapi.app.state.executor,
+            parser_params,
             ParserMods.TO_DOCLING,
+            semaphore=request_fastapi.app.state.parser_semaphore,
         )
         translator = CustomModelTranslator(
             parsed,
             source_language,
             target_language,
             translator_data.include_image_in_output,
-            max_concurrency=settings.TRANSALTOR_MAX_CONCURRENCY,
+            max_concurrency=settings.TRANSLATOR_MAX_CONCURRENCY,
+            shared_semaphore=getattr(
+                request_fastapi.app.state,
+                "translation_semaphore",
+                None,
+            ),
+            http_session=getattr(request_fastapi.app.state, "http_session", None),
         )
         translated_path = await translator.translate_docling(ParserMods.TO_WORD, parsed)
         return FileResponse(
             path=translated_path,
-            filename=f"{Path(file_path).stem}(переведенный).docx",
+            filename=f"{download_stem}(переведенный).docx",
+            background=file_cleanup_task(translated_path),
         )
     except Exception as e:
         logger.error(f"Ошибка синхронного перевода в .docx: {e}")
-        raise e
+        if translated_path is not None:
+            await delete_file(translated_path)
+        raise
     finally:
         await delete_file(file_path)

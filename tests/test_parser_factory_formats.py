@@ -11,11 +11,31 @@ from modules.parser.v1.file_parsers import (
     ODTParser,
     TXTParser,
     XBRLParser,
+    DocParser,
+    PPTXParser,
+    XLSXParser,
 )
 from modules.parser.v1.schemas import ParserParams
 
 
 class ParserFactoryFormatsTest(unittest.TestCase):
+    def test_native_office_formats_are_not_reconverted(self):
+        cases = [
+            ("sample.docx", DocParser),
+            ("sample.xlsx", XLSXParser),
+            ("sample.pptx", PPTXParser),
+        ]
+
+        for filename, expected_parser in cases:
+            with self.subTest(filename=filename):
+                params = ParserParams(file_path=Path(filename))
+                with patch("modules.parser.v1.abc.factory.convert_doc_to") as convert_doc_to:
+                    parser = ParserFactory(params).get_parser()
+
+                convert_doc_to.assert_not_called()
+                self.assertIsInstance(parser, expected_parser)
+                self.assertEqual(params.file_path, Path(filename))
+
     def test_open_document_formats_are_not_converted_through_office_formats(self):
         cases = [
             ("sample.odt", ODTParser),

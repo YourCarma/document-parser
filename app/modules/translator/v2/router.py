@@ -77,9 +77,13 @@ async def translate_file_to_word_v2(
 ) -> TranslatorV2Response:
     task_id = str(uuid4())
 
-    webhook = WebhookManagerService(settings.WEBHOOK_MANAGER_URL)
-    watchtower = WatchtowerService(settings.WATCHTOWER_URL)
-    resource_manager = ResourceManagerService(settings.RESOURCE_MANAGER_URL)
+    session = request.app.state.http_session
+    webhook = WebhookManagerService(settings.WEBHOOK_MANAGER_URL, session=session)
+    watchtower = WatchtowerService(settings.WATCHTOWER_URL, session=session)
+    resource_manager = ResourceManagerService(
+        settings.RESOURCE_MANAGER_URL,
+        session=session,
+    )
 
     initial_response_data = TranslatorResponseData(
         original_language=translator_data.source_language,
@@ -113,6 +117,8 @@ async def translate_file_to_word_v2(
         webhook=webhook,
         watchtower=watchtower,
         resource_manager=resource_manager,
+        translation_semaphore=request.app.state.translation_semaphore,
+        parser_semaphore=request.app.state.parser_semaphore,
     )
 
     background_tasks.add_task(
