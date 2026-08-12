@@ -3,6 +3,8 @@ from typing import Optional
 import aiohttp
 from loguru import logger
 
+from modules.resource_manager.schemas import ResourceSchema
+
 
 class ResourceManagerService:
     """Клиент resource_manager для поиска пользовательского bucket."""
@@ -16,7 +18,7 @@ class ResourceManagerService:
         self.session = session
 
     async def get_user_bucket(self, user_id: str) -> Optional[str]:
-        """Вернуть `external_id` первого ресурса типа `Document` для пользователя."""
+        """Вернуть bucket-id персонального Document-ресурса."""
         if self.session is not None:
             return await self._get_user_bucket(self.session, user_id)
         async with aiohttp.ClientSession() as session:
@@ -38,18 +40,41 @@ class ResourceManagerService:
                         f"ResourceManager get_user_bucket [{resp.status}] "
                         f"user_id='{user_id}': {body}"
                     )
-                resources: list[dict] = await resp.json()
-                for resource in resources:
-                    external_id = resource.get("external_id")
-                    if external_id:
-                        logger.info(
-                            "ResourceManager: найден bucket user_id='{}' bucket='{}'",
-                            user_id,
-                            external_id,
-                        )
-                        return external_id
+                payload = await resp.json()
+                if not isinstance(payload, list):
+                    raise ValueError(
+                        "ResourceManager вернул некорректный список ресурсов"
+                    )
+
+                resources = [ResourceSchema.model_validate(item) for item in payload]
+                personal_resources = [
+                    resource
+                    for resource in resources
+                    if resource.resource_type == "Document"
+                    and resource.resource_owner == "User"
+                ]
+
+                if len(personal_resources) > 1:
+                    resource_ids = [resource.id for resource in personal_resources]
+                    raise ValueError(
+                        "ResourceManager вернул несколько персональных "
+                        f"Document-ресурсов user_id='{user_id}': {resource_ids}"
+                    )
+
+                if personal_resources:
+                    bucket = personal_resources[0].id
+                    logger.info(
+                        "ResourceManager: найден персональный bucket "
+                        "user_id='{}' bucket='{}' resource_name='{}'",
+                        user_id,
+                        bucket,
+                        personal_resources[0].name,
+                    )
+                    return bucket
+
                 logger.warning(
-                    "ResourceManager: bucket не найден user_id='{}' resources={}",
+                    "ResourceManager: персональный Document bucket "
+                    "не найден user_id='{}' resources={}",
                     user_id,
                     len(resources),
                 )

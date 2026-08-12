@@ -88,16 +88,15 @@ class TranslatorV2Service:
                 source_language,
                 target_language,
             )
-            storage_prefix = f"{user_id}/translator"
-
             current_stage = "загрузка оригинального файла"
             await self._update(
                 task_key, response_data, 5, TaskStatus.PROCESSING,
                 "Загружаю оригинальный файл...",
             )
-            await self.watchtower.create_folder(bucket, storage_prefix)
             object_key = await self.watchtower.upload_file(
-                bucket, file_path, original_filename, prefix=storage_prefix
+                bucket,
+                file_path,
+                original_filename,
             )
             original_link = await self.watchtower.get_sharelink(bucket, object_key)
             response_data.original_file = original_link
@@ -147,7 +146,9 @@ class TranslatorV2Service:
             stem = Path(original_filename).stem
             translated_filename = f"{stem}_(переведённый).docx"
             translated_key = await self.watchtower.upload_file(
-                bucket, translated_path, translated_filename, prefix=storage_prefix
+                bucket,
+                translated_path,
+                translated_filename,
             )
             translated_link = await self.watchtower.get_sharelink(bucket, translated_key)
             response_data.translated_file = translated_link

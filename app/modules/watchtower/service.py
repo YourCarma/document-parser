@@ -1,3 +1,4 @@
+from pathlib import Path
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import aiohttp
@@ -25,10 +26,11 @@ class WatchtowerService:
 
     async def create_folder(self, bucket: str, prefix: str):
         """Создать placeholder-папку в bucket, если backend этого требует."""
-        prefix = self.encode_path(prefix)
+        bucket_segment = quote(str(bucket), safe="")
+        prefix = str(prefix).strip("/")
         async def request(session: aiohttp.ClientSession):
             async with session.post(
-                f"{self.base_url}/api/v1/cloud/{bucket}/folder",
+                f"{self.base_url}/api/v1/cloud/{bucket_segment}/folder",
                 json={"prefix": prefix},
             ) as resp:
                 body = await resp.text()
@@ -53,39 +55,46 @@ class WatchtowerService:
         prefix: str = "",
     ) -> str:
         """Загрузить локальный файл в bucket и вернуть object key."""
-        encoded_filename = self.encode_path(filename)
-        encoded_prefix = self.encode_path(prefix)
+        bucket_segment = quote(str(bucket), safe="")
+        # Multipart fields carry Unicode strings. Pre-encoding them would make
+        # `%D0...` part of the actual object name and Watchtower would encode
+        # every `%` again as `%25` when producing a share URL.
+        safe_filename = Path(str(filename).replace("\\", "/")).name
+        normalized_prefix = str(prefix).strip("/")
         async def request(session: aiohttp.ClientSession):
             with open(local_path, "rb") as f:
-                form = aiohttp.FormData()
-                if encoded_prefix:
-                    form.add_field("prefix", encoded_prefix)
+                # Watchtower stores multipart `filename` literally. aiohttp's
+                # default quote_fields=True turns Cyrillic into `%D0...`, which
+                # then becomes the visible object name instead of URL syntax.
+                form = aiohttp.FormData(quote_fields=False)
+                if normalized_prefix:
+                    form.add_field("prefix", normalized_prefix)
                 form.add_field(
                     "files",
                     f,
-                    filename=encoded_filename,
+                    filename=safe_filename,
                     content_type="application/octet-stream",
                 )
                 async with session.put(
-                    f"{self.base_url}/api/v1/cloud/{bucket}/file/upload",
+                    f"{self.base_url}/api/v1/cloud/{bucket_segment}/file/upload",
                     data=form,
                 ) as resp:
                     body = await resp.text()
                     if resp.status not in (200, 201):
                         raise Exception(
                             f"Watchtower upload_file [{resp.status}] "
-                            f"bucket='{bucket}' file='{encoded_filename}': {body}"
+                            f"bucket='{bucket}' file='{safe_filename}': {body}"
                         )
                     logger.info(
                         "Watchtower: файл загружен bucket='{}' prefix='{}' filename='{}'",
                         bucket,
-                        encoded_prefix,
-                        encoded_filename,
+                        normalized_prefix,
+                        safe_filename,
                     )
         await self._with_session(request)
-        if encoded_prefix:
-            return f"{encoded_prefix}/{encoded_filename}"
-        return encoded_filename
+        if normalized_prefix:
+            return f"{normalized_prefix}/{safe_filename}"
+        return safe_filename
 
     async def get_sharelink(
         self,
@@ -94,9 +103,10 @@ class WatchtowerService:
         expired_secs: int = 3600 * 24 * 7,
     ) -> str:
         """Получить pre-signed share-ссылку для файла в bucket."""
+        bucket_segment = quote(str(bucket), safe="")
         async def request(session: aiohttp.ClientSession):
             async with session.post(
-                f"{self.base_url}/api/v1/cloud/{bucket}/file/share",
+                f"{self.base_url}/api/v1/cloud/{bucket_segment}/file/share",
                 json={"file_path": file_path, "expired_secs": expired_secs},
             ) as resp:
                 body = await resp.text()
@@ -115,15 +125,6 @@ class WatchtowerService:
                 )
                 return url
         return await self._with_session(request)
-
-    @staticmethod
-    def encode_path(path: str) -> str:
-        """URL-encode object path segment-by-segment, preserving folder separators."""
-        return "/".join(
-            quote(segment, safe="")
-            for segment in str(path).strip("/").split("/")
-            if segment
-        )
 
     @staticmethod
     def _apply_shared_prefix(url: str) -> str:
