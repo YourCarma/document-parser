@@ -15,7 +15,25 @@ from modules.parser.v1.file_parsers import (
     PPTXParser,
     XLSXParser,
 )
-from modules.parser.v1.schemas import ParserParams
+from modules.parser.v1.schemas import FileFormats, ParserParams
+from modules.parser.v1.utils import SUPPORTED_EXTENSIONS, is_supported_extension
+
+
+class SupportedExtensionsTest(unittest.TestCase):
+    def test_is_supported_extension_accepts_every_known_format(self):
+        for file_format in FileFormats:
+            for extension in file_format.value:
+                with self.subTest(extension=extension):
+                    self.assertIn(extension.lower(), SUPPORTED_EXTENSIONS)
+                    self.assertTrue(is_supported_extension(f"документ{extension}"))
+                    self.assertTrue(
+                        is_supported_extension(Path("/tmp") / f"файл{extension.upper()}")
+                    )
+
+    def test_is_supported_extension_rejects_unknown_and_extensionless(self):
+        for file_name in ["archive.zip", "binary.exe", "README", "", ".", "no_suffix."]:
+            with self.subTest(file_name=file_name):
+                self.assertFalse(is_supported_extension(file_name))
 
 
 class ParserFactoryFormatsTest(unittest.TestCase):

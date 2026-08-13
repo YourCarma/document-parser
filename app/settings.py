@@ -48,6 +48,15 @@ class Settings(BaseSettings):
     EXTERNAL_READ_TIMEOUT_SECS: float = 100.0
     EXTERNAL_HTTP_CONNECTION_LIMIT: int = 100
 
+    # --- Отмена и таймауты ---
+    TASK_CANCEL_CHECK_TTL_SECS: float = 5.0
+    PARSE_TIMEOUT_SECS: int = 900
+    SOFFICE_TIMEOUT_SECS: int = 180
+    TASK_TIMEOUT_SECS: int = 1500        # заведомо ниже consumer_timeout брокера
+
+    # --- Скачивание исходников ---
+    MAX_DOWNLOAD_FILE_SIZE_MB: int = 200
+
     CORS_ORIGINS: List[str] = ["*"]
     CORS_ALLOW_CREDENTIALS: bool = True
     
@@ -88,6 +97,10 @@ class Settings(BaseSettings):
         """Correctly-spelled alias; the legacy env name remains supported."""
         return self.TRANSALTOR_MAX_CONCURRENCY
     
+    @property
+    def MAX_DOWNLOAD_FILE_SIZE_BYTES(self) -> int:
+        return self.MAX_DOWNLOAD_FILE_SIZE_MB * 1024 * 1024
+
     @property
     def ARTIFACTS_PATH(cls):
         return Path(__file__).parent.parent.joinpath("ml")

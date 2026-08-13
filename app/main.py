@@ -5,10 +5,10 @@ from fastapi import FastAPI
 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from concurrent.futures.process import ProcessPoolExecutor
 from contextlib import asynccontextmanager
 from loguru import logger
 
+from modules.parser.v1.process_pool import ProcessPoolHolder
 from settings import settings
 from api.routers import routers
 
@@ -24,7 +24,9 @@ async def lifespan(app: FastAPI):
                                         /_/
     """
     logger.info(GREETINGS)
-    app.state.executor = ProcessPoolExecutor(max_workers=settings.PARSER_WORKERS)
+    logger.info("Формат ключа задач webhook_manager: '{{user_id}}:{}:{{task_id}}'",
+                settings.SERVICE_NAME)
+    app.state.executor = ProcessPoolHolder(max_workers=settings.PARSER_WORKERS)
     app.state.parser_semaphore = asyncio.Semaphore(settings.PARSER_WORKERS)
     app.state.translation_semaphore = asyncio.Semaphore(
         settings.TRANSLATOR_MAX_CONCURRENCY,
@@ -46,11 +48,7 @@ async def lifespan(app: FastAPI):
     finally:
         logger.info("Остановка сервиса document-parser")
         await app.state.http_session.close()
-        await asyncio.to_thread(
-            app.state.executor.shutdown,
-            wait=True,
-            cancel_futures=True,
-        )
+        await app.state.executor.shutdown(wait=True, cancel_futures=True)
 
 app = FastAPI(
     title="Document Parser",

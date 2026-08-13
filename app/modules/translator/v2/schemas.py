@@ -33,6 +33,16 @@ class TranslatorResponseData(BaseModel):
     )
 
 
+class TranslationOutcome(BaseModel):
+    """Результат этапа перевода документа."""
+
+    file_path: str = Field(description="Путь к временному переведённому .docx.")
+    untranslated_count: int = Field(
+        default=0,
+        description="Сколько элементов не переведено.",
+    )
+
+
 class TranslatorV2Response(BaseModel):
     task_id: str = Field(
         description="Идентификатор созданной асинхронной задачи.",

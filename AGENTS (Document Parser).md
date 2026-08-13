@@ -34,16 +34,18 @@ app/
       router.py               3 синхронных эндпоинта
       schemas.py              ParserRequest/ParserParams/ParserMods/FileFormats
       exceptions.py           HTTPException-наследники
-      utils.py                save_file, delete_file, parse_document, run_in_process, convert_doc_to
+      utils.py                save_file, delete_file, parse_document, run_in_process, convert_doc_to, is_supported_extension
+      process_pool.py         ProcessPoolHolder: пересборка пула после гибели воркера
       abc/abc.py              ParserABC: чистка текста, to_utf8, общие поля
       abc/factory.py          ParserFactory: расширение -> класс парсера
       file_parsers/           по одному классу на семейство форматов
     translator/v1/            синхронный перевод (CustomModelTranslator)
       router.py, service.py, schemas.py, utils.py (post_request + retry), abc/abc.py
     translator/v2/            асинхронный перевод (TranslatorV2Service) + свой AGENTS.md
-    watchtower/               клиент облачного хранилища (upload, sharelink)
+    watchtower/               клиент облачного хранилища (upload, download, sharelink) + exceptions.py
     resource_manager/         клиент поиска персонального бакета пользователя
-    webhook_manager/          клиент задач: create_task, update_progress, update_response_data
+    webhook_manager/          клиент задач: create_task, update_progress, update_response_data, get_task
+                              + cancellation.py (токены отмены задачи)
 tests/                        unittest, без pytest
 ml/                           локальные модели Docling (в git не хранится, монтируется в docker)
 docs/                         drawio-схемы контекста
@@ -103,8 +105,10 @@ POST /api/v1/parser/parse/{text|file|file/word}
 
 Всё создаётся один раз в `lifespan` ([app/main.py](app/main.py)) и живёт в `app.state`:
 
-- `executor` — `ProcessPoolExecutor(PARSER_WORKERS)`. Docling CPU-bound, поэтому
-  процессы, а не потоки.
+- `executor` — `ProcessPoolHolder(PARSER_WORKERS)`, владелец `ProcessPoolExecutor`.
+  Docling CPU-bound, поэтому процессы, а не потоки. При `BrokenProcessPool`
+  `run_in_process` пересобирает пул и делает одну повторную попытку
+  (`retries=1`); голый `Executor` тоже принимается, но не пересобирается.
 - `parser_semaphore` — `Semaphore(PARSER_WORKERS)`, ограничивает очередь к пулу.
 - `translation_semaphore` — `Semaphore(TRANSLATOR_MAX_CONCURRENCY)`, **общий на всё
   приложение** лимит одновременных запросов к сервису перевода.
@@ -154,6 +158,12 @@ POST /api/v1/parser/parse/{text|file|file/word}
   `WATCHTOWER_SHARED_HOST`.
 - `ALLOWED_MIME_TYPES` содержит `application/octet-stream`, поэтому MIME-проверка
   почти ничего не отсекает — реальный отбор идёт по расширению в фабрике.
+- Таймауты и отмена: `TASK_TIMEOUT_SECS` (общий лимит задачи V2, держите его
+  заведомо ниже `consumer_timeout` брокера), `PARSE_TIMEOUT_SECS` (этап парсинга),
+  `SOFFICE_TIMEOUT_SECS` (одна конвертация LibreOffice),
+  `TASK_CANCEL_CHECK_TTL_SECS` (кэш отрицательного ответа об отмене).
+- `MAX_DOWNLOAD_FILE_SIZE_MB` — лимит для `WatchtowerService.download_file`;
+  property `MAX_DOWNLOAD_FILE_SIZE_BYTES` отдаёт его в байтах.
 
 ## 8. Запуск
 
@@ -190,9 +200,14 @@ PYTHONPATH=app poetry run python -m unittest discover -s tests -t tests
   для них не применяются. Если добавляете использование этих полей в `ParserABC` —
   эти два класса упадут.
 - **`TimeoutError` в `parser/v1/exceptions.py` перекрывает встроенный.** В
-  `translator/v2/service.py` в `except (TimeoutError, RetryableUpstreamError)`
-  ловится именно встроенный (он же `asyncio.TimeoutError`). Импорт кастомного
-  в этот модуль тихо сломает fallback «оставить оригинал при таймауте».
+  `translator/v2/service.py` ловится именно встроенный (он же
+  `asyncio.TimeoutError`) — и в деградации элемента, и в ветке общего таймаута.
+  Импорт кастомного в этот модуль тихо сломает и то, и другое.
+- **Исключения, пересекающие границу процесса, обязаны быть пиклюемыми.**
+  У `HTTPException` пустой `args`, при распиковке он падает с `TypeError`.
+  Поэтому таймаут конвертации внутри воркера — `ConversionTimeoutError`
+  (обычный `Exception`), а `ProcessPoolUnavailable` (`HTTPException`) бросается
+  только в родительском процессе.
 - **Блок экспорта `match mode:` продублирован в 6 парсерах и в двух сервисах
   перевода.** Копии уже разошлись (`--wrap=none` только в переводчике, `to_utf8`
   для ячеек пропущен в `DocParser`). Правя экспорт, проверьте все копии или
@@ -201,11 +216,16 @@ PYTHONPATH=app poetry run python -m unittest discover -s tests -t tests
   в каждом `TO_WORD`. При апгрейде docling ломается в первую очередь он.
 - **Обратные кавычки в переводе заменяются на `*`** перед записью — иначе pandoc
   ломает разметку.
-- **Смерть воркера ломает пул до рестарта.** Docling может уронить процесс на
-  битом файле; `ProcessPoolExecutor` после этого отдаёт `BrokenProcessPool` на
-  все последующие задачи. Восстановления сейчас нет.
-- **Задачи V2 живут в `BackgroundTasks`** — не переживают рестарт процесса, не
-  имеют общего таймаута и не ограничены по количеству.
+- **Смерть воркера больше не ломает пул навсегда.** Docling может уронить процесс
+  на битом файле; `ProcessPoolHolder.rebuild()` заменяет сломанный пул,
+  `run_in_process` повторяет задачу один раз. Пересборка идемпотентна: параллельные
+  вызовы с одним и тем же сломанным пулом пересоберут его ровно один раз.
+- **`asyncio.timeout` не убивает воркер парсинга.** По `PARSE_TIMEOUT_SECS`
+  отменяется только ожидание: слот `parser_semaphore` освобождается раньше, чем
+  реально завершится процесс. Это принято осознанно, в логе остаётся
+  `logger.error` с `task_id`.
+- **Задачи V2 живут в `BackgroundTasks`** — не переживают рестарт процесса и не
+  ограничены по количеству; общий лимит времени задаёт `TASK_TIMEOUT_SECS`.
 - **Аутентификации нет.** `X-User-ID` принимается на веру, сервис рассчитан на
   работу за шлюзом.
 
@@ -219,7 +239,10 @@ PYTHONPATH=app poetry run python -m unittest discover -s tests -t tests
 | `test_txt_parser_docling.py` | `DoclingFormatParser` |
 | `test_translator_v1_service.py` | батчи перевода, ретраи, экспорт |
 | `test_translator_v2_service.py` | конвейер V2 целиком на моках |
-| `test_async_storage_clients.py` | `Watchtower` / `Webhook` / `ResourceManager` на фейковой сессии |
+| `test_async_storage_clients.py` | `Watchtower` / `Webhook` / `ResourceManager` на фейковой сессии, ретраи, `get_task`, `download_file` |
+| `test_process_pool.py` | `ProcessPoolHolder` и повтор `run_in_process` после `BrokenProcessPool` |
+| `test_soffice_conversion.py` | таймаут LibreOffice и убийство группы процессов |
+| `test_translator_v2_cancellation.py` | токены отмены и остановка конвейера V2 |
 
 Внешние сервисы, docling и VLM в тестах не поднимаются — всё на моках и
 фейковых сессиях. Новые тесты пишите в том же стиле (`unittest.IsolatedAsyncioTestCase`).

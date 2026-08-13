@@ -1,10 +1,21 @@
+import asyncio
 from pathlib import Path
+from typing import Union
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import aiohttp
 from loguru import logger
 
+from modules.watchtower.exceptions import (
+    FileNotFoundInStorage,
+    FileTooLargeError,
+    WatchtowerError,
+    WatchtowerUnavailable,
+)
 from settings import settings
+
+
+DOWNLOAD_CHUNK_SIZE: int = 1024 * 1024
 
 
 class WatchtowerService:
@@ -95,6 +106,101 @@ class WatchtowerService:
         if normalized_prefix:
             return f"{normalized_prefix}/{safe_filename}"
         return safe_filename
+
+    async def download_file(
+        self,
+        bucket: str,
+        file_path: str,
+        dest_dir: Union[str, Path],
+        max_size_mb: int | None = None,
+    ) -> str:
+        """Скачать файл из бакета в `dest_dir` потоком и вернуть путь к нему."""
+        limit_mb = (
+            settings.MAX_DOWNLOAD_FILE_SIZE_MB if max_size_mb is None else max_size_mb
+        )
+        limit_bytes = limit_mb * 1024 * 1024
+        bucket_segment = quote(str(bucket), safe="")
+
+        # Суффикс имени определяет парсер, поэтому имя не перекодируем и не
+        # нормализуем — только отбрасываем путь.
+        name = Path(str(file_path).replace("\\", "/")).name
+        if not name:
+            raise WatchtowerError(
+                f"Watchtower download_file: пустое имя файла в '{file_path}'"
+            )
+
+        dest_root = Path(dest_dir)
+        dest_root.mkdir(parents=True, exist_ok=True)
+        dest = dest_root / name
+
+        async def request(session: aiohttp.ClientSession):
+            try:
+                async with session.post(
+                    f"{self.base_url}/api/v1/cloud/{bucket_segment}/file/download",
+                    json={"file_name": file_path},
+                ) as resp:
+                    if resp.status == 404:
+                        raise FileNotFoundInStorage(
+                            f"Watchtower download_file [404] "
+                            f"bucket='{bucket}' file='{file_path}'"
+                        )
+                    if resp.status >= 500:
+                        raise WatchtowerUnavailable(
+                            f"Watchtower download_file [{resp.status}] "
+                            f"bucket='{bucket}' file='{file_path}'"
+                        )
+                    if resp.status != 200:
+                        raise WatchtowerError(
+                            f"Watchtower download_file [{resp.status}] "
+                            f"bucket='{bucket}' file='{file_path}'"
+                        )
+
+                    # Быстрая отсечка по заголовку: не начинаем качать заведомо
+                    # слишком большой файл. Реальная защита — счётчик ниже.
+                    declared = resp.headers.get("Content-Length")
+                    if declared is not None:
+                        try:
+                            declared_size = int(declared)
+                        except (TypeError, ValueError):
+                            declared_size = None
+                        if declared_size is not None and declared_size > limit_bytes:
+                            raise FileTooLargeError(
+                                f"Файл '{name}' занимает {declared_size} байт "
+                                f"при лимите {limit_mb} МБ"
+                            )
+
+                    downloaded = 0
+                    try:
+                        with open(dest, "wb") as destination:
+                            async for chunk in resp.content.iter_chunked(
+                                DOWNLOAD_CHUNK_SIZE
+                            ):
+                                downloaded += len(chunk)
+                                if downloaded > limit_bytes:
+                                    raise FileTooLargeError(
+                                        f"Файл '{name}' превысил лимит "
+                                        f"{limit_mb} МБ при скачивании"
+                                    )
+                                destination.write(chunk)
+                    except BaseException:
+                        dest.unlink(missing_ok=True)
+                        raise
+            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+                raise WatchtowerUnavailable(
+                    f"Watchtower download_file недоступен "
+                    f"bucket='{bucket}' file='{file_path}': {exc}"
+                ) from exc
+
+            logger.info(
+                "Watchtower: файл скачан bucket='{}' file='{}' dest='{}' bytes={}",
+                bucket,
+                file_path,
+                dest,
+                downloaded,
+            )
+            return str(dest)
+
+        return await self._with_session(request)
 
     async def get_sharelink(
         self,
