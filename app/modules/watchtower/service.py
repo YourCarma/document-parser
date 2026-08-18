@@ -1,7 +1,7 @@
 import asyncio
 from pathlib import Path
 from typing import Union
-from urllib.parse import quote, urlsplit, urlunsplit
+from urllib.parse import quote
 
 import aiohttp
 from loguru import logger
@@ -201,49 +201,3 @@ class WatchtowerService:
             return str(dest)
 
         return await self._with_session(request)
-
-    async def get_sharelink(
-        self,
-        bucket: str,
-        file_path: str,
-        expired_secs: int = 3600 * 24 * 7,
-    ) -> str:
-        """Получить pre-signed share-ссылку для файла в bucket."""
-        bucket_segment = quote(str(bucket), safe="")
-        async def request(session: aiohttp.ClientSession):
-            async with session.post(
-                f"{self.base_url}/api/v1/cloud/{bucket_segment}/file/share",
-                json={"file_path": file_path, "expired_secs": expired_secs},
-            ) as resp:
-                body = await resp.text()
-                if resp.status not in (200, 201):
-                    raise Exception(
-                        f"Watchtower get_sharelink [{resp.status}] "
-                        f"bucket='{bucket}' file='{file_path}': {body}"
-                )
-                data = await resp.json()
-                url = data.get("message", "")
-                url = self._apply_shared_prefix(url)
-                logger.info(
-                    "Watchtower: share link received bucket='{}' file_path='{}'",
-                    bucket,
-                    file_path,
-                )
-                return url
-        return await self._with_session(request)
-
-    @staticmethod
-    def _apply_shared_prefix(url: str) -> str:
-        """Вернуть относительный frontend path или старую host-based ссылку."""
-        shared_prefix = settings.WATCHTOWER_SHARED_PREFIX.strip("/")
-        if url and shared_prefix:
-            parsed = urlsplit(url)
-            path = parsed.path if parsed.scheme or parsed.netloc else urlsplit(url).path
-            path = f"/{shared_prefix}/{path.lstrip('/')}"
-            return urlunsplit(("", "", path, parsed.query, parsed.fragment))
-
-        if not url or not settings.WATCHTOWER_SHARED_HOST:
-            return url
-        host = settings.WATCHTOWER_SHARED_HOST.rstrip("/")
-        path = url.lstrip("/")
-        return f"{host}/{path}"

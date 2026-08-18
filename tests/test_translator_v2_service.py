@@ -86,7 +86,6 @@ class TranslatorV2ServiceTest(unittest.IsolatedAsyncioTestCase):
         if watchtower is None:
             watchtower = AsyncMock()
             watchtower.upload_file.return_value = "Отчет.docx"
-            watchtower.get_sharelink.return_value = "share-link"
         return TranslatorV2Service(
             webhook=webhook,
             watchtower=watchtower,
@@ -114,7 +113,6 @@ class TranslatorV2ServiceTest(unittest.IsolatedAsyncioTestCase):
         resource_manager.get_user_bucket.return_value = "personal-resource-id"
         watchtower = AsyncMock()
         watchtower.upload_file.side_effect = ["original.docx", "translated.docx"]
-        watchtower.get_sharelink.side_effect = ["original-link", "translated-link"]
         service = TranslatorV2Service(
             webhook=webhook,
             watchtower=watchtower,
@@ -331,7 +329,6 @@ class TranslatorV2ServiceTest(unittest.IsolatedAsyncioTestCase):
         webhook = AsyncMock()
         watchtower = AsyncMock()
         watchtower.upload_file.return_value = "translated.docx"
-        watchtower.get_sharelink.side_effect = ["original-link", "translated-link"]
         service = self._service(webhook, watchtower=watchtower)
         source = FakeSource()
 
@@ -353,17 +350,16 @@ class TranslatorV2ServiceTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(status, TaskStatus.READY)
         self.assertEqual(watchtower.upload_file.await_count, 1)
-        self.assertEqual(watchtower.get_sharelink.await_count, 2)
-        self.assertEqual(
-            watchtower.get_sharelink.await_args_list[0],
-            call("personal-resource-id", "documents/report.pdf"),
-        )
+        # В response_data идут object key, а не share-ссылки: ссылка протухает,
+        # ключ живёт столько же, сколько файл.
+        published = webhook.update_response_data.await_args_list[-1].args[1]
+        self.assertEqual(published["original_file"], "documents/report.pdf")
+        self.assertEqual(published["translated_file"], "translated.docx")
 
     async def test_output_prefix_is_passed_to_result_upload(self):
         webhook = AsyncMock()
         watchtower = AsyncMock()
         watchtower.upload_file.return_value = "translated.docx"
-        watchtower.get_sharelink.return_value = "link"
         service = self._service(webhook, watchtower=watchtower)
 
         with (
@@ -393,7 +389,6 @@ class TranslatorV2ServiceTest(unittest.IsolatedAsyncioTestCase):
         webhook = AsyncMock()
         watchtower = AsyncMock()
         watchtower.upload_file.side_effect = ["original.docx", "translated.docx"]
-        watchtower.get_sharelink.side_effect = ["original-link", "translated-link"]
         service = self._service(webhook, watchtower=watchtower)
 
         with (
@@ -442,15 +437,16 @@ class TranslatorV2ServiceTest(unittest.IsolatedAsyncioTestCase):
         webhook = AsyncMock()
         watchtower = AsyncMock()
         failure = FileNotFoundInStorage("нет файла")
-        watchtower.get_sharelink.side_effect = failure
         service = self._service(webhook, watchtower=watchtower)
+        source = FakeSource()
+        source.error = failure
 
         with patch("modules.translator.v2.service.delete_file", AsyncMock()):
-            status = await self._run(service, source=FakeSource())
+            status = await self._run(service, source=source)
 
         self.assertEqual(status, TaskStatus.ERROR)
         self.assertIs(service.last_error, failure)
-        self.assertEqual(service.last_stage, "upload original file")
+        self.assertEqual(service.last_stage, "fetch source file")
 
     async def test_source_release_is_called_in_finally(self):
         webhook = AsyncMock()

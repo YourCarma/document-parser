@@ -200,7 +200,6 @@ class TranslationCancellationTest(unittest.IsolatedAsyncioTestCase):
         resource_manager.get_user_bucket.return_value = "bucket-1"
         watchtower = AsyncMock()
         watchtower.upload_file.return_value = "Отчет.docx"
-        watchtower.get_sharelink.return_value = "original-link"
         service = self._service(webhook, watchtower, resource_manager)
 
         with (

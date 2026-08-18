@@ -32,7 +32,7 @@
   ресурс с `resource_type == "Document"` и `resource_owner == "User"`, возвращает
   его `id` как bucket. Несколько персональных ресурсов → `ValueError`.
 - `watchtower.service.WatchtowerService` — `upload_file(bucket, local_path, filename)`
-  и `get_sharelink(bucket, object_key)`. Загрузка идёт multipart-ом с
+  `download_file(bucket, file_path, dest_dir)`. Загрузка идёт multipart-ом с
   `quote_fields=False`: Watchtower сохраняет имя из multipart буквально, поэтому
   предварительное URL-кодирование кириллицы ломает имя объекта (см. комментарии
   в коде — это не случайность, не «чинить»).
@@ -65,11 +65,11 @@ POST /api/v2/parser/translator/file/word  (X-User-ID, файл, языки, па
 
 run_translation_task (фон):
   1. resolve user bucket      resource_manager.get_user_bucket
-  2. upload original file     watchtower.upload_file + get_sharelink     -> 5..10 %
+  2. upload original file     watchtower.upload_file                     -> 5..10 %
   3. parse document           run_in_process(parse_document, TO_DOCLING) -> 15 %
                               под asyncio.timeout(PARSE_TIMEOUT_SECS)
   4. translate document       _translate_with_progress                   -> 15..93 %
-  5. upload translated file   watchtower.upload_file + get_sharelink     -> 95 %
+  5. upload translated file   watchtower.upload_file                     -> 95 %
   6. READY                                                                    -> 100 %
   finally: удалить временный исходник и временный .docx
 ```
@@ -125,8 +125,8 @@ run_translation_task (фон):
 {
   "original_language": "en",
   "target_language": "ru",
-  "original_file": "<sharelink>",
-  "translated_file": "<sharelink>",
+  "original_file": "<object key>",
+  "translated_file": "<object key>",
   "text_status": "Перевожу... 45/120 элементов",
   "error": null
 }
@@ -173,8 +173,7 @@ run_translation_task (фон):
 ## 8. Настройки (`app/settings.py`)
 
 `SERVICE_NAME`, `TRANSLATOR_ADDRESS`, `TRANSLATE_URI`, `DETECT_LANGUAGE_URL`,
-`WEBHOOK_MANAGER_URL`, `WATCHTOWER_URL`, `WATCHTOWER_SHARED_PREFIX`,
-`WATCHTOWER_SHARED_HOST`, `RESOURCE_MANAGER_URL`, `PARSER_WORKERS`,
+`WEBHOOK_MANAGER_URL`, `WATCHTOWER_URL`, `RESOURCE_MANAGER_URL`, `PARSER_WORKERS`,
 `EXTERNAL_*_TIMEOUT_SECS`, `TASK_TIMEOUT_SECS`, `PARSE_TIMEOUT_SECS`,
 `TASK_CANCEL_CHECK_TTL_SECS`.
 
@@ -189,9 +188,6 @@ run_translation_task (фон):
   друг друга.
 - `quote_fields=False` в `FormData` и отсутствие ручного URL-кодирования имени —
   осознанное решение против двойного кодирования кириллицы.
-- `_apply_shared_prefix` превращает ссылку Watchtower в относительный
-  frontend-путь, если задан `WATCHTOWER_SHARED_PREFIX`; иначе используется
-  legacy-режим с `WATCHTOWER_SHARED_HOST`.
 - `_export_to_word_sync` использует приватный `DoclingDocument._make_copy_with_refmode`
   — при апгрейде docling проверять в первую очередь это место.
 - Задача живёт в `BackgroundTasks`: она не переживает рестарт процесса. Общий

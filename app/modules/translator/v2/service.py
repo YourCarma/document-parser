@@ -191,8 +191,9 @@ class TranslatorV2Service:
                     # Из очереди оригинал уже в бакете — повторная заливка была
                     # бы и лишней, и неидемпотентной.
                     object_key = source_file.remote_key
-                original_link = await self.watchtower.get_sharelink(bucket, object_key)
-                response_data.original_file = original_link
+                # Отдаём object key, а не share-ссылку: ссылка протухает по
+                # сроку, а ключ в бакете живёт столько же, сколько файл.
+                response_data.original_file = object_key
                 await self._update(
                     task_key, response_data, 10, TaskStatus.PROCESSING,
                     "Оригинал готов. Парсинг документа...",
@@ -265,10 +266,7 @@ class TranslatorV2Service:
                     translated_filename,
                     **upload_kwargs,
                 )
-                translated_link = await self.watchtower.get_sharelink(
-                    bucket, translated_key
-                )
-                response_data.translated_file = translated_link
+                response_data.translated_file = translated_key
 
                 if outcome.untranslated_count > 0:
                     final_text_status = _UNTRANSLATED_TEXT_STATUS.format(

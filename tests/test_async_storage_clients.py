@@ -414,41 +414,6 @@ class WatchtowerServiceTest(unittest.IsolatedAsyncioTestCase):
             )
         )
 
-    async def test_get_sharelink_returns_relative_gateway_path(self):
-        session = FakeSession(
-            FakeResponse(
-                status=200,
-                json_data={
-                    "message": "http://internal/user-1/translator/%D0%9E%D1%82%D1%87%D0%B5%D1%82.docx?token=abc",
-                    "status": 200,
-                },
-            )
-        )
-
-        with patch("modules.watchtower.service.settings.WATCHTOWER_SHARED_PREFIX", "/api/gateway"):
-            with patch("modules.watchtower.service.aiohttp.ClientSession", return_value=session):
-                url = await WatchtowerService("http://watchtower").get_sharelink(
-                    "bucket-1",
-                    "user-1/translator/Отчет.docx",
-                )
-
-        self.assertEqual(
-            url,
-            "/api/gateway/user-1/translator/%D0%9E%D1%82%D1%87%D0%B5%D1%82.docx?token=abc",
-        )
-        method, request_url, kwargs = session.requests[0]
-        self.assertEqual(method, "post")
-        self.assertEqual(
-            request_url,
-            "http://watchtower/api/v1/cloud/bucket-1/file/share",
-        )
-        self.assertEqual(
-            kwargs["json"]["file_path"],
-            "user-1/translator/Отчет.docx",
-        )
-
-
-class WatchtowerDownloadTest(unittest.IsolatedAsyncioTestCase):
     async def test_download_file_streams_and_preserves_extension(self):
         response = FakeStreamResponse(chunks=[b"abc", b"defg"])
         session = FakeSession(response)

@@ -14,7 +14,7 @@
 
 Асинхронный конвейер перевода уже существует целиком — это
 `app/modules/translator/v2/`. Он умеет всё, что нужно очереди: бакет через
-`resource_manager`, upload и share-ссылки через `watchtower`, прогресс и
+`resource_manager`, upload файлов через `watchtower`, прогресс и
 `response_data` в `webhook_manager`, парсинг в пуле процессов, перевод под
 общим семафором.
 
@@ -39,7 +39,7 @@
 
 | Клиент `webhook_manager` | `app/modules/webhook_manager/service.py` | `create_task`, `update_progress`, `update_response_data`. **Нет** `get_task` (нужен для отмены). |
 | Клиент `resource_manager` | `app/modules/resource_manager/service.py` | готов, `get_user_bucket(user_id)`. |
-| Клиент `watchtower` | `app/modules/watchtower/service.py` | `upload_file`, `get_sharelink`, `create_folder`. **Нет** `download_file`. |
+| Клиент `watchtower` | `app/modules/watchtower/service.py` | `upload_file`, `create_folder`. **Нет** `download_file`. |
 | Async-пайплайн перевода | `app/modules/translator/v2/service.py` | работает, но завязан на локальный путь файла и на `BackgroundTasks`. |
 | Общие ресурсы | `app/main.py` (lifespan) | `http_session`, `executor`, `parser_semaphore`, `translation_semaphore` — консюмер обязан переиспользовать их, а не заводить свои. |
 | Брокер | — | отсутствует полностью (в зависимостях нет ни `aio-pika`, ни `pika`). |
@@ -619,7 +619,7 @@ webhook-менеджер моргнул — задача помечается `E
 **6. Коллизии имён в бакете.** `upload_file` вызывается с `prefix=""`
 (`service.py:96,148`), файл ложится в корень персонального бакета под исходным
 именем. Два перевода `отчёт.pdf` → второй затирает результат первого, включая
-уже выданную пользователю share-ссылку. Предлагается префикс на задачу
+уже отданный пользователю object key. Предлагается префикс на задачу
 (`translated/{task_id}/` или `output_prefix` из payload).
 
 **7. Session-туннелирование.** `service.py:135` передаёт в переводчик

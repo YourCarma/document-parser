@@ -21,7 +21,7 @@ class SourceFile:
     original_filename: str
     remote_key: str | None = None
     """Object key, если файл УЖЕ лежит в бакете. Тогда конвейер не заливает
-    оригинал повторно, а только берёт на него share-ссылку."""
+    оригинал повторно, а сразу отдаёт его object key."""
 
 
 class SourceFileProviderABC(ABC):

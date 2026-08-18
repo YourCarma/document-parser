@@ -47,8 +47,8 @@ router = APIRouter(prefix="/api/v2/parser")
 {{
   "original_language": "en",
   "target_language": "ru",
-  "original_file": "<sharelink или пусто>",
-  "translated_file": "<sharelink или пусто>",
+  "original_file": "<object key в бакете или пусто>",
+  "translated_file": "<object key в бакете или пусто>",
   "text_status": "Перевожу... 45/120 элементов"
 }}
 ```

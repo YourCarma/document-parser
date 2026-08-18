@@ -42,7 +42,7 @@ app/
     translator/v1/            синхронный перевод (CustomModelTranslator)
       router.py, service.py, schemas.py, utils.py (post_request + retry), abc/abc.py
     translator/v2/            асинхронный перевод (TranslatorV2Service) + свой AGENTS.md
-    watchtower/               клиент облачного хранилища (upload, download, sharelink) + exceptions.py
+    watchtower/               клиент облачного хранилища (upload, download) + exceptions.py
     resource_manager/         клиент поиска персонального бакета пользователя
     webhook_manager/          клиент задач: create_task, update_progress, update_response_data, get_task
                               + cancellation.py (токены отмены задачи)
@@ -130,7 +130,7 @@ POST /api/v1/parser/parse/{text|file|file/word}
 | Сервис перевода | `TRANSLATOR_ADDRESS` + `TRANSLATE_URI` | оба переводчика |
 | Детектор языка | `DETECT_LANGUAGE_URL` | `source_language=auto` |
 | `webhook_manager` | `WEBHOOK_MANAGER_URL` | Translator V2 |
-| `watchtower` (хранилище) | `WATCHTOWER_URL`, `WATCHTOWER_SHARED_*` | Translator V2 |
+| `watchtower` (хранилище) | `WATCHTOWER_URL` | Translator V2 |
 | `resource_manager` | `RESOURCE_MANAGER_URL` | Translator V2 |
 | LibreOffice (`soffice`) | системный пакет | `.doc`, `.rtf` |
 | pandoc | системный пакет | любой экспорт `TO_WORD` |
@@ -153,9 +153,8 @@ POST /api/v1/parser/parse/{text|file|file/word}
 - Поле называется `TRANSALTOR_MAX_CONCURRENCY` (историческая опечатка).
   В коде используйте property `settings.TRANSLATOR_MAX_CONCURRENCY`;
   env читается по обоим написаниям через `AliasChoices`.
-- `WATCHTOWER_SHARED_PREFIX` задаёт относительный frontend-префикс для share-ссылок
-  (например `/api/gateway`); если пусто — работает legacy-режим с
-  `WATCHTOWER_SHARED_HOST`.
+- Share-ссылок сервис не выдаёт: в `response_data` уходит object key внутри
+  бакета. Ссылка протухает по сроку, ключ живёт столько же, сколько файл.
 - `ALLOWED_MIME_TYPES` содержит `application/octet-stream`, поэтому MIME-проверка
   почти ничего не отсекает — реальный отбор идёт по расширению в фабрике.
 - Таймауты и отмена: `TASK_TIMEOUT_SECS` (общий лимит задачи V2, держите его
