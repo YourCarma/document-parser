@@ -1,6 +1,4 @@
 import uvicorn
-import asyncio
-import aiohttp
 from fastapi import FastAPI
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,7 +6,9 @@ from fastapi.responses import HTMLResponse
 from contextlib import asynccontextmanager
 from loguru import logger
 
-from modules.parser.v1.process_pool import ProcessPoolHolder
+from modules.broker.abc.factory import BrokerFactory
+from modules.broker.dispatcher import build_default_dispatcher
+from runtime import AppRuntime
 from settings import settings
 from api.routers import routers
 
@@ -26,29 +26,33 @@ async def lifespan(app: FastAPI):
     logger.info(GREETINGS)
     logger.info("Формат ключа задач webhook_manager: '{{user_id}}:{}:{{task_id}}'",
                 settings.SERVICE_NAME)
-    app.state.executor = ProcessPoolHolder(max_workers=settings.PARSER_WORKERS)
-    app.state.parser_semaphore = asyncio.Semaphore(settings.PARSER_WORKERS)
-    app.state.translation_semaphore = asyncio.Semaphore(
-        settings.TRANSLATOR_MAX_CONCURRENCY,
-    )
-    timeout = aiohttp.ClientTimeout(
-        total=None,
-        connect=settings.EXTERNAL_CONNECT_TIMEOUT_SECS,
-        sock_read=settings.EXTERNAL_READ_TIMEOUT_SECS,
-    )
-    connector = aiohttp.TCPConnector(
-        limit=settings.EXTERNAL_HTTP_CONNECTION_LIMIT,
-    )
-    app.state.http_session = aiohttp.ClientSession(
-        timeout=timeout,
-        connector=connector,
-    )
+    runtime = AppRuntime.create()
+    runtime.attach(app)
+    app.state.runtime = runtime
+    app.state.broker = None
     try:
+        if settings.BROKER_ENABLED:
+            consumer = BrokerFactory.create(runtime, build_default_dispatcher())
+            try:
+                # Ошибка подключения пробрасывается осознанно: не консюмящий
+                # воркер в проде хуже упавшего.
+                await consumer.connect()
+                await consumer.start()
+            except Exception:
+                # До app.state.broker дело не дошло, значит finally его не
+                # погасит: закрываем соединение здесь, иначе оно повиснет.
+                await consumer.stop()
+                raise
+            app.state.broker = consumer
+        else:
+            logger.info("Broker: отключён (BROKER_ENABLED=false)")
         yield
     finally:
         logger.info("Остановка сервиса document-parser")
-        await app.state.http_session.close()
-        await app.state.executor.shutdown(wait=True, cancel_futures=True)
+        if app.state.broker is not None:
+            # Сначала консюмер: он пользуется сессией и пулом из runtime.
+            await app.state.broker.stop()
+        await runtime.shutdown()
 
 app = FastAPI(
     title="Document Parser",

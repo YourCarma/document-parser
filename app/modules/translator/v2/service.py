@@ -10,14 +10,26 @@ from docling_core.types.doc import DoclingDocument, TableItem, TextItem
 from fastapi import HTTPException
 from loguru import logger
 
+from modules.messages import (
+    MSG_FILE_NOT_FOUND,
+    MSG_FILE_TOO_LARGE,
+    MSG_LANGUAGE_UNDETECTED,
+    MSG_NO_BUCKET,
+    MSG_TIMEOUT,
+    MSG_UNSUPPORTED_FORMAT,
+)
+from modules.parser.v1.exceptions import ContentNotSupportedError, ConversionTimeoutError
 from modules.parser.v1.schemas import ParserMods, ParserParams
 from modules.parser.v1.utils import delete_file, parse_document, run_in_process
+from modules.resource_manager.exceptions import BucketNotFound
 from modules.resource_manager.service import ResourceManagerService
 from modules.translator.v1.exceptions import LanguageNotSupported
 from modules.translator.v1.service import CustomModelTranslator
 from modules.translator.v1.utils import RetryableUpstreamError
 from modules.translator.v2.exceptions import TaskTimeout
 from modules.translator.v2.schemas import TranslationOutcome, TranslatorResponseData
+from modules.translator.v2.sources import LocalUploadSource, SourceFileProviderABC
+from modules.watchtower.exceptions import FileNotFoundInStorage, FileTooLargeError
 from modules.watchtower.service import WatchtowerService
 from modules.webhook_manager.cancellation import (
     CancellationTokenABC,
@@ -32,6 +44,7 @@ from settings import settings
 _STAGE_MESSAGES: dict[str, str] = {
     "инициализация": "Ошибка при инициализации задачи",
     "получение бакета пользователя": "Ошибка при получении ресурсов пользователя",
+    "получение исходного файла": "Ошибка при получении исходного файла",
     "загрузка оригинального файла": "Ошибка при загрузке оригинального файла в хранилище",
     "парсинг документа": "Ошибка при обработке документа",
     "перевод документа": "Ошибка в сервисе переводчика",
@@ -47,6 +60,26 @@ def _stage_to_user_message(stage: str) -> str:
     return _STAGE_MESSAGES.get(stage, f"Ошибка на этапе «{stage}»")
 
 
+# Тип исключения точнее этапа: «файл не найден» полезнее, чем «ошибка при
+# загрузке оригинального файла».
+_ERROR_MESSAGES: tuple[tuple[type[BaseException], str], ...] = (
+    (FileNotFoundInStorage, MSG_FILE_NOT_FOUND),
+    (FileTooLargeError, MSG_FILE_TOO_LARGE),
+    (BucketNotFound, MSG_NO_BUCKET),
+    (ContentNotSupportedError, MSG_UNSUPPORTED_FORMAT),
+    (LanguageNotSupported, MSG_LANGUAGE_UNDETECTED),
+    (ConversionTimeoutError, MSG_TIMEOUT),
+)
+
+
+def _exception_to_user_message(exc: BaseException, stage: str) -> str:
+    """Сначала по типу исключения, иначе — по этапу (прежнее поведение)."""
+    for exc_type, message in _ERROR_MESSAGES:
+        if isinstance(exc, exc_type):
+            return message
+    return _stage_to_user_message(stage)
+
+
 class TranslatorV2Service:
 
     def __init__(
@@ -56,15 +89,21 @@ class TranslatorV2Service:
         resource_manager: ResourceManagerService,
         translation_semaphore: asyncio.Semaphore | None = None,
         parser_semaphore: asyncio.Semaphore | None = None,
+        http_session: aiohttp.ClientSession | None = None,
     ):
         self.webhook = webhook
         self.watchtower = watchtower
         self.resource_manager = resource_manager
         self.translation_semaphore = translation_semaphore
         self.parser_semaphore = parser_semaphore
+        self.http_session = http_session
         # Последний успешно опубликованный прогресс: при отмене публикуем его,
         # чтобы не обнулять шкалу в UI. Отсюда правило «один сервис — одна задача».
         self._last_progress: float = 0.0
+        # Причина отказа для транспорта: консюмеру нужно исходное исключение,
+        # чтобы решить судьбу сообщения.
+        self.last_error: BaseException | None = None
+        self.last_stage: str = ""
 
     async def run_translation_task(
         self,
@@ -78,13 +117,22 @@ class TranslatorV2Service:
         parser_params: ParserParams,
         executor,
         cancellation: CancellationTokenABC | None = None,
+        *,
+        source: SourceFileProviderABC | None = None,
+        bucket: str | None = None,
+        output_prefix: str = "",
     ) -> TaskStatus:
         """Выполнить фоновую задачу перевода и вернуть терминальный статус.
 
         Исключений не бросает — кроме `asyncio.CancelledError`, который обязан
         пройти наружу, чтобы отмена корутины работала штатно.
+
+        `source is None` -> локальный файл по `file_path` (HTTP-сценарий).
+        `bucket is not None` -> resource_manager не опрашивается.
+        `output_prefix` — префикс только для переведённого файла.
         """
         cancellation = cancellation or NullCancellationToken(task_key)
+        source = source or LocalUploadSource(file_path, original_filename)
         final_status = TaskStatus.ERROR
         translated_path: str | None = None
         response_data = TranslatorResponseData(
@@ -99,12 +147,9 @@ class TranslatorV2Service:
                 await cancellation.raise_if_cancelled("до старта")
 
                 current_stage = "получение бакета пользователя"
-                bucket = await self.resource_manager.get_user_bucket(user_id)
+                bucket = bucket or await self.resource_manager.get_user_bucket(user_id)
                 if not bucket:
-                    raise Exception(
-                        f"Resource Manager не вернул бакет для пользователя '{user_id}'. "
-                        "Убедитесь, что у пользователя есть ресурс типа Document."
-                    )
+                    raise BucketNotFound(user_id)
                 logger.info(
                     "TranslatorV2: старт задачи task_id='{}' user_id='{}' bucket='{}' source='{}' target='{}'",
                     task_id,
@@ -115,21 +160,34 @@ class TranslatorV2Service:
                 )
                 await cancellation.raise_if_cancelled("получение бакета пользователя")
 
-                current_stage = "загрузка оригинального файла"
+                current_stage = "получение исходного файла"
                 await self._update(
                     task_key, response_data, 5, TaskStatus.PROCESSING,
-                    "Загружаю оригинальный файл...",
+                    "Готовлю исходный файл...",
                 )
-                object_key = await self.watchtower.upload_file(
-                    bucket,
-                    file_path,
-                    original_filename,
-                )
+                source_file = await source.acquire(bucket)
+                file_path = source_file.local_path
+                original_filename = source_file.original_filename
+                # Локальный путь известен только здесь: из очереди файл
+                # появляется на диске лишь после acquire().
+                parser_params.file_path = Path(file_path)
+
+                current_stage = "загрузка оригинального файла"
+                if source_file.remote_key is None:
+                    object_key = await self.watchtower.upload_file(
+                        bucket,
+                        file_path,
+                        original_filename,
+                    )
+                else:
+                    # Из очереди оригинал уже в бакете — повторная заливка была
+                    # бы и лишней, и неидемпотентной.
+                    object_key = source_file.remote_key
                 original_link = await self.watchtower.get_sharelink(bucket, object_key)
                 response_data.original_file = original_link
                 await self._update(
                     task_key, response_data, 10, TaskStatus.PROCESSING,
-                    "Оригинал загружен. Парсинг документа...",
+                    "Оригинал готов. Парсинг документа...",
                 )
                 await cancellation.raise_if_cancelled("загрузка оригинального файла")
 
@@ -175,7 +233,7 @@ class TranslatorV2Service:
                     include_image_in_output=False,
                     max_concurrency=settings.TRANSLATOR_MAX_CONCURRENCY,
                     shared_semaphore=self.translation_semaphore,
-                    http_session=self.webhook.session,
+                    http_session=self.http_session or self.webhook.session,
                 )
                 outcome = await self._translate_with_progress(
                     translator, docling_doc, task_key, response_data, cancellation
@@ -190,10 +248,14 @@ class TranslatorV2Service:
                 )
                 stem = Path(original_filename).stem
                 translated_filename = f"{stem}_(переведённый).docx"
+                # Пустой префикс не передаём вовсе: HTTP-сценарий кладёт
+                # результат в корень бакета ровно как раньше.
+                upload_kwargs = {"prefix": output_prefix} if output_prefix else {}
                 translated_key = await self.watchtower.upload_file(
                     bucket,
                     translated_path,
                     translated_filename,
+                    **upload_kwargs,
                 )
                 translated_link = await self.watchtower.get_sharelink(
                     bucket, translated_key
@@ -215,6 +277,7 @@ class TranslatorV2Service:
                 final_status = TaskStatus.READY
 
         except TaskCancelled as exc:
+            self.last_error = None
             logger.info(
                 "TranslatorV2: задача отменена task_id='{}' user_id='{}' stage='{}'",
                 task_id,
@@ -239,6 +302,8 @@ class TranslatorV2Service:
             )
             raise
         except (TimeoutError, TaskTimeout) as exc:
+            self.last_error = exc
+            self.last_stage = current_stage
             logger.error(
                 "TranslatorV2: задача превысила лимит времени "
                 "task_id='{}' user_id='{}' stage='{}' error='{}'",
@@ -257,6 +322,8 @@ class TranslatorV2Service:
             )
             final_status = TaskStatus.ERROR
         except Exception as exc:
+            self.last_error = exc
+            self.last_stage = current_stage
             logger.error(
                 "TranslatorV2: задача завершилась ошибкой task_id='{}' user_id='{}' stage='{}' error='{}'",
                 task_id,
@@ -264,7 +331,7 @@ class TranslatorV2Service:
                 current_stage,
                 exc,
             )
-            public_error = _stage_to_user_message(current_stage)
+            public_error = _exception_to_user_message(exc, current_stage)
             response_data.error = public_error
             await self._publish_terminal(
                 task_key,
@@ -276,6 +343,15 @@ class TranslatorV2Service:
             final_status = TaskStatus.ERROR
         finally:
             await self._cleanup_files(file_path, translated_path)
+            try:
+                await source.release()
+            except Exception as exc:
+                logger.warning(
+                    "TranslatorV2: не удалось освободить источник файла "
+                    "task_id='{}': {}",
+                    task_id,
+                    exc,
+                )
 
         return final_status
 

@@ -119,6 +119,7 @@ async def translate_file_to_word_v2(
         resource_manager=resource_manager,
         translation_semaphore=request.app.state.translation_semaphore,
         parser_semaphore=request.app.state.parser_semaphore,
+        http_session=session,
     )
 
     background_tasks.add_task(

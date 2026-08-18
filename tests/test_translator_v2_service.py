@@ -9,8 +9,31 @@ from fastapi import HTTPException
 
 from modules.translator.v2.schemas import TranslationOutcome, TranslatorResponseData
 from modules.translator.v2.service import TranslatorV2Service
+from modules.translator.v2.sources import SourceFile, SourceFileProviderABC
 from modules.parser.v1.schemas import ParserParams
+from modules.watchtower.exceptions import FileNotFoundInStorage
 from modules.webhook_manager.schemas import TaskStatus
+
+
+class FakeSource(SourceFileProviderABC):
+    """Источник, имитирующий уже лежащий в бакете файл."""
+
+    def __init__(self, remote_key: str | None = "documents/report.pdf"):
+        self.remote_key = remote_key
+        self.released = 0
+        self.error: BaseException | None = None
+
+    async def acquire(self, bucket: str) -> SourceFile:
+        if self.error is not None:
+            raise self.error
+        return SourceFile(
+            local_path="/tmp/source.pdf",
+            original_filename="report.pdf",
+            remote_key=self.remote_key,
+        )
+
+    async def release(self) -> None:
+        self.released += 1
 
 
 class FakeDoclingDocument:
@@ -303,6 +326,155 @@ class TranslatorV2ServiceTest(unittest.IsolatedAsyncioTestCase):
         published = webhook.update_response_data.await_args_list[-1].args[1]
         self.assertEqual(published["text_status"], "Превышено время обработки")
         self.assertEqual(published["error"], "Превышено время обработки")
+
+    async def test_queue_source_is_not_uploaded_again(self):
+        webhook = AsyncMock()
+        watchtower = AsyncMock()
+        watchtower.upload_file.return_value = "translated.docx"
+        watchtower.get_sharelink.side_effect = ["original-link", "translated-link"]
+        service = self._service(webhook, watchtower=watchtower)
+        source = FakeSource()
+
+        with (
+            patch(
+                "modules.translator.v2.service.run_in_process",
+                AsyncMock(return_value=FakeDoclingDocument([])),
+            ),
+            patch.object(
+                service,
+                "_translate_with_progress",
+                AsyncMock(
+                    return_value=TranslationOutcome(file_path="/tmp/translated.docx")
+                ),
+            ),
+            patch("modules.translator.v2.service.delete_file", AsyncMock()),
+        ):
+            status = await self._run(service, source=source)
+
+        self.assertEqual(status, TaskStatus.READY)
+        self.assertEqual(watchtower.upload_file.await_count, 1)
+        self.assertEqual(watchtower.get_sharelink.await_count, 2)
+        self.assertEqual(
+            watchtower.get_sharelink.await_args_list[0],
+            call("personal-resource-id", "documents/report.pdf"),
+        )
+
+    async def test_output_prefix_is_passed_to_result_upload(self):
+        webhook = AsyncMock()
+        watchtower = AsyncMock()
+        watchtower.upload_file.return_value = "translated.docx"
+        watchtower.get_sharelink.return_value = "link"
+        service = self._service(webhook, watchtower=watchtower)
+
+        with (
+            patch(
+                "modules.translator.v2.service.run_in_process",
+                AsyncMock(return_value=FakeDoclingDocument([])),
+            ),
+            patch.object(
+                service,
+                "_translate_with_progress",
+                AsyncMock(
+                    return_value=TranslationOutcome(file_path="/tmp/translated.docx")
+                ),
+            ),
+            patch("modules.translator.v2.service.delete_file", AsyncMock()),
+        ):
+            await self._run(
+                service, source=FakeSource(), output_prefix="translated/task-1"
+            )
+
+        self.assertEqual(
+            watchtower.upload_file.await_args_list[-1].kwargs,
+            {"prefix": "translated/task-1"},
+        )
+
+    async def test_empty_output_prefix_keeps_positional_call(self):
+        webhook = AsyncMock()
+        watchtower = AsyncMock()
+        watchtower.upload_file.side_effect = ["original.docx", "translated.docx"]
+        watchtower.get_sharelink.side_effect = ["original-link", "translated-link"]
+        service = self._service(webhook, watchtower=watchtower)
+
+        with (
+            patch(
+                "modules.translator.v2.service.run_in_process",
+                AsyncMock(return_value=FakeDoclingDocument([])),
+            ),
+            patch.object(
+                service,
+                "_translate_with_progress",
+                AsyncMock(
+                    return_value=TranslationOutcome(file_path="/tmp/translated.docx")
+                ),
+            ),
+            patch("modules.translator.v2.service.delete_file", AsyncMock()),
+        ):
+            await self._run(service)
+
+        self.assertEqual(watchtower.upload_file.await_args_list[-1].kwargs, {})
+
+    async def test_explicit_bucket_skips_resource_manager(self):
+        webhook = AsyncMock()
+        resource_manager = AsyncMock()
+        service = self._service(webhook, resource_manager=resource_manager)
+
+        with (
+            patch(
+                "modules.translator.v2.service.run_in_process",
+                AsyncMock(return_value=FakeDoclingDocument([])),
+            ),
+            patch.object(
+                service,
+                "_translate_with_progress",
+                AsyncMock(
+                    return_value=TranslationOutcome(file_path="/tmp/translated.docx")
+                ),
+            ),
+            patch("modules.translator.v2.service.delete_file", AsyncMock()),
+        ):
+            status = await self._run(service, bucket="explicit-bucket")
+
+        self.assertEqual(status, TaskStatus.READY)
+        resource_manager.get_user_bucket.assert_not_awaited()
+
+    async def test_last_error_is_recorded_on_failure(self):
+        webhook = AsyncMock()
+        watchtower = AsyncMock()
+        failure = FileNotFoundInStorage("нет файла")
+        watchtower.get_sharelink.side_effect = failure
+        service = self._service(webhook, watchtower=watchtower)
+
+        with patch("modules.translator.v2.service.delete_file", AsyncMock()):
+            status = await self._run(service, source=FakeSource())
+
+        self.assertEqual(status, TaskStatus.ERROR)
+        self.assertIs(service.last_error, failure)
+        self.assertEqual(service.last_stage, "загрузка оригинального файла")
+
+    async def test_source_release_is_called_in_finally(self):
+        webhook = AsyncMock()
+        service = self._service(webhook)
+        source = FakeSource()
+        source.error = FileNotFoundInStorage("нет файла")
+
+        with patch("modules.translator.v2.service.delete_file", AsyncMock()):
+            status = await self._run(service, source=source)
+
+        self.assertEqual(status, TaskStatus.ERROR)
+        self.assertEqual(source.released, 1)
+
+    async def test_error_message_prefers_exception_over_stage(self):
+        webhook = AsyncMock()
+        service = self._service(webhook)
+        source = FakeSource()
+        source.error = FileNotFoundInStorage("нет файла")
+
+        with patch("modules.translator.v2.service.delete_file", AsyncMock()):
+            await self._run(service, source=source)
+
+        published = webhook.update_response_data.await_args_list[-1].args[1]
+        self.assertEqual(published["error"], "Файл не найден в хранилище")
 
     async def test_parse_timeout_publishes_error_status(self):
         webhook = AsyncMock()

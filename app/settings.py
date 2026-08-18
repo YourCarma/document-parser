@@ -1,5 +1,6 @@
 from typing import List
 from pathlib import Path
+from urllib.parse import quote, urlsplit, urlunsplit
 import os
 import multiprocessing
 
@@ -57,6 +58,53 @@ class Settings(BaseSettings):
     # --- Скачивание исходников ---
     MAX_DOWNLOAD_FILE_SIZE_MB: int = 200
 
+    # --- Брокер ---
+    BROKER_ENABLED: bool = False
+    BROKER_TYPE: str = "rabbitmq"
+
+    # Либо целый URL, либо части (для k8s-секретов). URL приоритетнее.
+    RMQ_URL: str = ""
+    RMQ_HOST: str = "localhost"
+    RMQ_PORT: int = 5672
+    RMQ_USER: str = "guest"
+    RMQ_PASSWORD: str = "guest"
+    RMQ_VHOST: str = "/"
+
+    # Exchange, очередь и биндинг между ними создаёт task_gateway. Мы их не
+    # объявляем, только проверяем существование.
+    RMQ_EXCHANGE: str = "document-parser.tasks"
+    # Подтверждено на dev-брокере: exchange объявлен как direct, не topic.
+    # Используется только при passive-проверке и в логах.
+    RMQ_EXCHANGE_TYPE: str = "direct"
+    RMQ_QUEUE: str = "document-parser.queue"
+    # Только для диагностики: биндинг создаёт продюсер, мы его не трогаем.
+    RMQ_ROUTING_KEYS: List[str] = ["document-parser.translate"]
+    RMQ_PREFETCH_COUNT: int = 3
+    RMQ_DLX: str = "document-parser.dlx"
+    RMQ_DLQ: str = "document-parser.dlq"
+    RMQ_RETRY_QUEUE: str = "document-parser.retry"
+    RMQ_RETRY_DELAY_SECS: int = 30
+    RMQ_MAX_RETRIES: int = 3
+    RMQ_RECONNECT_INTERVAL_SECS: int = 5
+    RMQ_CONNECT_TIMEOUT_SECS: int = 15
+    RMQ_CONSUMER_TAG: str = "document-parser"
+    # Объявлять ли НАШИ служебные объекты (DLX, DLQ, retry-очередь). Чужих
+    # exchange и очереди этот флаг не касается — их не объявляем никогда.
+    # false имеет смысл только там, где у пользователя нет прав на configure.
+    RMQ_DECLARE_TOPOLOGY: bool = True
+    # Предполагаемый consumer_timeout брокера. Фактическое значение не
+    # подтверждено — используется только для валидации и логов, не для логики.
+    RMQ_ACK_DEADLINE_SECS: int = 1800
+    RMQ_ACK_SAFETY_MARGIN_SECS: int = 120
+    RMQ_SHUTDOWN_GRACE_SECS: int = 60
+
+    # Написание имени сервиса у гейтвея не подтверждено: по умолчанию берём
+    # сегмент из task_type ("document-parser.translate" -> "document-parser").
+    TASK_KEY_SERVICE_FROM_TASK_TYPE: bool = True
+
+    # Куда кладём результат перевода из очереди. {task_id} подставляется.
+    TRANSLATE_OUTPUT_PREFIX: str = "translated/{task_id}"
+
     CORS_ORIGINS: List[str] = ["*"]
     CORS_ALLOW_CREDENTIALS: bool = True
     
@@ -100,6 +148,35 @@ class Settings(BaseSettings):
     @property
     def MAX_DOWNLOAD_FILE_SIZE_BYTES(self) -> int:
         return self.MAX_DOWNLOAD_FILE_SIZE_MB * 1024 * 1024
+
+    @property
+    def RMQ_CONNECTION_URL(self) -> str:
+        """URL целиком либо собранный из частей. Пароль URL-экранируется."""
+        if self.RMQ_URL:
+            return self.RMQ_URL
+        vhost = quote(self.RMQ_VHOST.lstrip("/"), safe="")
+        return (
+            f"amqp://{quote(self.RMQ_USER, safe='')}:"
+            f"{quote(self.RMQ_PASSWORD, safe='')}@"
+            f"{self.RMQ_HOST}:{self.RMQ_PORT}/{vhost}"
+        )
+
+    @property
+    def RMQ_SAFE_URL(self) -> str:
+        """URL без пароля — единственный вариант, допустимый в логах."""
+        try:
+            parts = urlsplit(self.RMQ_CONNECTION_URL)
+            if parts.password is None:
+                return self.RMQ_CONNECTION_URL
+            netloc = f"{parts.username or ''}:***@{parts.hostname or ''}"
+            if parts.port:
+                netloc = f"{netloc}:{parts.port}"
+            return urlunsplit(
+                (parts.scheme, netloc, parts.path, parts.query, parts.fragment)
+            )
+        except Exception:
+            # В логах лучше заглушка, чем риск утечки пароля.
+            return "amqp://***"
 
     @property
     def ARTIFACTS_PATH(cls):
