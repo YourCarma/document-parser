@@ -91,6 +91,9 @@ class RabbitMQConsumer(BrokerConsumerABC):
         # Сторож DLQ и последнее известное число сообщений в ней (-1 — не знаем).
         self._dlq_watch_task: asyncio.Task | None = None
         self._dlq_depth: int = -1
+        # Отдельный канал под опрос DLQ: падение опроса не должно ронять
+        # канал публикации копий в DLQ и retry.
+        self._stats_channel = None
 
     # --- жизненный цикл -------------------------------------------------
 
@@ -143,9 +146,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
         if not self._callbacks_attached:
             # connect_robust переподключается сам, соединение то же самое —
             # без флага колбэки копились бы с каждым вызовом connect().
-            self._connection.close_callbacks.add(
-                lambda *_: logger.warning("Broker: соединение с брокером закрыто")
-            )
+            self._connection.close_callbacks.add(self._on_connection_closed)
             self._connection.reconnect_callbacks.add(
                 lambda *_: logger.info("Broker: соединение с брокером восстановлено")
             )
@@ -369,6 +370,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
             self._consumer_tag = None
             self._started = False
             self._dlq_watch_task = None
+            self._stats_channel = None
 
     async def health(self) -> bool:
         return (
@@ -378,6 +380,32 @@ class RabbitMQConsumer(BrokerConsumerABC):
             and self._channel is not None
             and not self._channel.is_closed
         )
+
+    def _on_connection_closed(self, *_) -> None:
+        """Реакция на обрыв соединения: снять осиротевшие задачи.
+
+        Брокер возвращает в очередь все неподтверждённые доставки сразу, а
+        `connect_robust` восстанавливает подписку — и то же сообщение приезжает
+        второй раз. Задача первой доставки при этом продолжает работать: её ack
+        уже никуда не годится (delivery tag протух), но она держит воркеры
+        пула, пишет свою ленту прогресса и кладёт результат в тот же объект.
+        Отменяем: путь отмены в `_process_message` ничего не подтверждает и не
+        публикует, сообщение переиграется одной копией.
+        """
+        logger.warning("Broker: соединение с брокером закрыто")
+        if self._stopping:
+            # Штатная остановка: задачи гасит stop() со своим grace-периодом.
+            return
+        orphans = [task for task in self._tasks if not task.done()]
+        if not orphans:
+            return
+        logger.critical(
+            "Broker: обрыв соединения во время обработки — снимаю {} задач, "
+            "их сообщения уже возвращены брокером в очередь",
+            len(orphans),
+        )
+        for task in orphans:
+            task.cancel()
 
     async def health_report(self) -> dict:
         """Подробное состояние для `/health`."""
@@ -397,20 +425,29 @@ class RabbitMQConsumer(BrokerConsumerABC):
     async def dlq_depth(self) -> int:
         """Число сообщений в DLQ. -1 — узнать не удалось.
 
-        Канал берём каждый раз новый: aio-pika кэширует `declaration_result`
-        объявленной очереди, и повторный passive-declare на том же канале
-        вернёт счётчик на момент первого объявления, а не текущий.
+        Опрос идёт по выделенному долгоживущему каналу с `robust=False`.
+        Два обстоятельства делают именно такую форму обязательной:
+
+        * `RobustChannel.declare_queue` кэширует `declaration_result` для
+          robust-объявлений, и повторный passive-declare отдал бы счётчик на
+          момент первого вызова. `robust=False` мимо кэша — счётчик свежий.
+        * Канал на каждый опрос заводить нельзя: при `NOT_FOUND` брокер
+          закрывает канал, `close()` пропускается как уже закрытый, а
+          `RobustChannel` тихо восстанавливает его — получаем сироту без
+          ссылки и рост числа каналов на каждый неудачный опрос.
         """
-        if not self._config.dlq:
+        if not self._config.dlq or not self._dlq_ready:
             return -1
         if self._connection is None or self._connection.is_closed:
             return -1
 
-        channel = None
         try:
-            channel = await self._connection.channel()
-            queue = await channel.declare_queue(self._config.dlq, passive=True)
-            return int(queue.declaration_result.message_count or 0)
+            if self._stats_channel is None or self._stats_channel.is_closed:
+                self._stats_channel = await self._connection.channel()
+            result = await (
+                await self._stats_channel.get_underlay_channel()
+            ).queue_declare(self._config.dlq, passive=True)
+            return int(result.message_count or 0)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -418,18 +455,32 @@ class RabbitMQConsumer(BrokerConsumerABC):
                 "Broker: не удалось опросить DLQ '{}': {}", self._config.dlq, exc
             )
             return -1
-        finally:
-            if channel is not None and not channel.is_closed:
-                try:
-                    await channel.close()
-                except Exception:
-                    pass
 
     def _start_dlq_watch(self) -> None:
         interval = self._config.dlq_check_interval_secs
         if interval <= 0 or self._dlq_watch_task is not None:
             return
-        self._dlq_watch_task = asyncio.create_task(self._dlq_watch_loop(interval))
+        task = asyncio.create_task(self._dlq_watch_loop(interval))
+        task.add_done_callback(self._on_dlq_watch_done)
+        self._dlq_watch_task = task
+
+    def _on_dlq_watch_done(self, task: asyncio.Task) -> None:
+        """Сторож умер — сказать об этом и не оставлять поле занятым.
+
+        Иначе единственный сигнал о непустой DLQ исчезает молча, а занятое
+        поле не даёт поднять сторожа заново.
+        """
+        if self._dlq_watch_task is task:
+            self._dlq_watch_task = None
+        if task.cancelled() or self._stopping:
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.critical(
+                "Broker: сторож DLQ упал с '{}' — непустая DLQ больше не будет "
+                "замечена до перезапуска сервиса",
+                exc,
+            )
 
     async def _stop_dlq_watch(self) -> None:
         task = self._dlq_watch_task
@@ -439,8 +490,12 @@ class RabbitMQConsumer(BrokerConsumerABC):
         task.cancel()
         try:
             await task
-        except (asyncio.CancelledError, Exception):
-            pass
+        except asyncio.CancelledError:
+            # Отменили нас самих, а не сторожа — не проглатывать.
+            if asyncio.current_task() is not None and asyncio.current_task().cancelling():
+                raise
+        except Exception as exc:
+            logger.warning("Broker: сторож DLQ завершился с ошибкой: {}", exc)
 
     async def _dlq_watch_loop(self, interval: int) -> None:
         """Периодически смотреть в DLQ и кричать, если она непустая.
@@ -450,22 +505,28 @@ class RabbitMQConsumer(BrokerConsumerABC):
         которой пользователь уже знает, а мы ещё нет.
         """
         previous = -1
+        first = True
         while not self._stopping:
-            try:
-                await asyncio.wait_for(self._stop_event.wait(), timeout=interval)
-                return
-            except (asyncio.TimeoutError, TimeoutError):
-                pass
-            except asyncio.CancelledError:
-                raise
+            if not first:
+                try:
+                    await asyncio.wait_for(self._stop_event.wait(), timeout=interval)
+                    return
+                except (asyncio.TimeoutError, TimeoutError):
+                    pass
+                except asyncio.CancelledError:
+                    raise
+            # Первый опрос сразу: иначе после рестарта пода /health первую
+            # минуту отдаёт «не знаем» вместо фактической глубины.
+            first = False
 
             depth = await self.dlq_depth()
             self._dlq_depth = depth
             if depth > 0:
                 # Порог по изменению, а не по факту: иначе непустая DLQ будет
                 # писать одно и то же в лог каждую минуту до ручного разбора.
-                level = "critical" if depth != previous else "warning"
-                getattr(logger, level)(
+                level = "CRITICAL" if depth != previous else "WARNING"
+                logger.log(
+                    level,
                     "Broker: в DLQ '{}' лежит {} сообщений — задачи не выполнены "
                     "и требуют ручного разбора",
                     self._config.dlq,

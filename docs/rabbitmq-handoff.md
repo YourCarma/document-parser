@@ -165,7 +165,13 @@ exchange `document-parser.tasks` — **direct**, биндинг на `document-p
 значению: `TASK_TIMEOUT_SECS=3000` (50 минут), `RMQ_ACK_DEADLINE_SECS=3600`,
 запас 600 с при требуемых `RMQ_ACK_SAFETY_MARGIN_SECS=120`.
 
-**Осталось сделать руками** — в `/mnt/sda/Development/DevDeployment/sys-dev/rabbitmq/rabbitmq.conf`
+**Это жёсткое предусловие деплоя, а не пожелание.** Стартовая валидация
+сравнивает `TASK_TIMEOUT_SECS` с **нашей** настройкой `RMQ_ACK_DEADLINE_SECS`,
+а не с фактическим значением на брокере, — то есть предупреждения в логе не
+будет, а разрыв канала на 30-й минуте будет. Пока брокер не перенастроен,
+воркер с `BROKER_ENABLED=true` в прод не выкатывать.
+
+**Как сделать** — в `/mnt/sda/Development/DevDeployment/sys-dev/rabbitmq/rabbitmq.conf`
 (bind-mount в контейнер) дописать строку:
 
 ```ini

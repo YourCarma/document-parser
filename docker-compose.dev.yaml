@@ -6,6 +6,10 @@
 #
 # Management UI: http://localhost:15672 (guest/guest)
 #
+# ВНИМАНИЕ: порты 5672/15672 могут быть уже заняты общим брокером
+# контура (например sys-dev-rabbitmq-1). Тогда этот compose не нужен —
+# используйте существующий брокер, проверив в нём consumer_timeout.
+#
 # Рабочие exchange и очередь сервис НЕ создаёт — их владелец task_gateway.
 # Для локальной работы без гейтвея создайте их руками:
 #   docker compose -f docker-compose.dev.yaml exec rabbitmq \

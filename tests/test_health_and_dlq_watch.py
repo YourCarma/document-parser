@@ -80,50 +80,80 @@ class HealthReportTest(unittest.IsolatedAsyncioTestCase):
 
 
 class DlqDepthTest(unittest.IsolatedAsyncioTestCase):
-    async def test_depth_is_unknown_without_connection(self):
-        consumer = build_consumer()
-        self.assertEqual(await consumer.dlq_depth(), -1)
-
-    async def test_depth_uses_fresh_channel_each_time(self):
-        """aio-pika кэширует declaration_result: канал обязан быть новым."""
-        consumer = build_consumer()
-        channels = []
-
-        def make_channel():
-            channel = MagicMock()
-            channel.is_closed = False
-            queue = MagicMock()
-            queue.declaration_result.message_count = 4
-            channel.declare_queue = AsyncMock(return_value=queue)
-            channel.close = AsyncMock()
-            channels.append(channel)
-            return channel
-
+    @staticmethod
+    def _connection(message_count=4, error=None):
+        """Соединение с одним каналом и подложкой, отдающей счётчик."""
+        underlay = MagicMock()
+        if error is not None:
+            underlay.queue_declare = AsyncMock(side_effect=error)
+        else:
+            underlay.queue_declare = AsyncMock(
+                return_value=MagicMock(message_count=message_count)
+            )
+        channel = MagicMock()
+        channel.is_closed = False
+        channel.get_underlay_channel = AsyncMock(return_value=underlay)
         connection = MagicMock()
         connection.is_closed = False
-        connection.channel = AsyncMock(side_effect=lambda *a, **kw: make_channel())
+        connection.channel = AsyncMock(return_value=channel)
+        return connection, channel, underlay
+
+    async def test_depth_is_unknown_without_connection(self):
+        consumer = build_consumer()
+        consumer._dlq_ready = True
+        consumer._connection = None
+        self.assertEqual(await consumer.dlq_depth(), -1)
+
+    async def test_depth_is_unknown_when_dlq_was_not_declared(self):
+        """Не смогли объявить DLQ — не долбим брокер каждую минуту."""
+        consumer = build_consumer()
+        consumer._dlq_ready = False
+        connection, _, underlay = self._connection()
+        consumer._connection = connection
+
+        self.assertEqual(await consumer.dlq_depth(), -1)
+        underlay.queue_declare.assert_not_awaited()
+
+    async def test_depth_reuses_single_channel_and_bypasses_cache(self):
+        """Канал один на все опросы, счётчик берётся мимо кэша aio-pika.
+
+        Новый канал на опрос течёт: при NOT_FOUND брокер закрывает канал,
+        а RobustChannel молча восстанавливает его уже без ссылки у нас.
+        """
+        consumer = build_consumer()
+        consumer._dlq_ready = True
+        connection, channel, underlay = self._connection(message_count=4)
         consumer._connection = connection
 
         first = await consumer.dlq_depth()
         second = await consumer.dlq_depth()
 
         self.assertEqual((first, second), (4, 4))
-        self.assertEqual(len(channels), 2)
-        for channel in channels:
-            channel.declare_queue.assert_awaited_once_with(
-                "document-parser.dlq", passive=True
-            )
-            channel.close.assert_awaited_once()
+        connection.channel.assert_awaited_once()
+        self.assertIs(consumer._stats_channel, channel)
+        self.assertEqual(underlay.queue_declare.await_count, 2)
+        underlay.queue_declare.assert_awaited_with(
+            "document-parser.dlq", passive=True
+        )
+        # declare_queue кэширует declaration_result — им пользоваться нельзя.
+        channel.declare_queue.assert_not_called()
+
+    async def test_depth_recreates_channel_after_it_was_closed(self):
+        consumer = build_consumer()
+        consumer._dlq_ready = True
+        connection, channel, _ = self._connection()
+        consumer._connection = connection
+        dead = MagicMock()
+        dead.is_closed = True
+        consumer._stats_channel = dead
+
+        self.assertEqual(await consumer.dlq_depth(), 4)
+        self.assertIs(consumer._stats_channel, channel)
 
     async def test_depth_is_unknown_when_queue_is_missing(self):
         consumer = build_consumer()
-        channel = MagicMock()
-        channel.is_closed = False
-        channel.declare_queue = AsyncMock(side_effect=RuntimeError("NOT_FOUND"))
-        channel.close = AsyncMock()
-        connection = MagicMock()
-        connection.is_closed = False
-        connection.channel = AsyncMock(return_value=channel)
+        consumer._dlq_ready = True
+        connection, _, _ = self._connection(error=RuntimeError("NOT_FOUND"))
         consumer._connection = connection
 
         self.assertEqual(await consumer.dlq_depth(), -1)
@@ -136,19 +166,44 @@ class DlqWatchTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(consumer._dlq_watch_task)
 
     async def test_watch_logs_and_remembers_depth(self):
-        consumer = build_consumer(dlq_check_interval_secs=1)
+        consumer = build_consumer(dlq_check_interval_secs=60)
         consumer.dlq_depth = AsyncMock(return_value=3)
-        messages: list[str] = []
+        records: list[tuple] = []
 
         with patch("modules.broker.rabbitmq.consumer.logger") as fake_logger:
-            fake_logger.critical.side_effect = lambda msg, *a: messages.append(msg)
-            fake_logger.warning.side_effect = lambda msg, *a: messages.append(msg)
+            fake_logger.log.side_effect = lambda level, msg, *a: records.append(
+                (level, msg)
+            )
             consumer._start_dlq_watch()
-            await asyncio.sleep(1.3)
+            # Первый опрос идёт сразу, ждать интервал не нужно.
+            await asyncio.sleep(0.05)
             await consumer._stop_dlq_watch()
 
         self.assertEqual(consumer._dlq_depth, 3)
-        self.assertTrue(any("DLQ" in m for m in messages), messages)
+        self.assertTrue(records, "сторож не сказал о непустой DLQ")
+        self.assertEqual(records[0][0], "CRITICAL")
+
+    async def test_watch_escalates_only_when_depth_changes(self):
+        """Непустая DLQ не должна кричать critical каждый цикл до разбора."""
+        consumer = build_consumer(dlq_check_interval_secs=60)
+        depths = iter([1, 1, 2])
+        # После исчерпания держим последнее значение, чтобы цикл не упал.
+        consumer.dlq_depth = AsyncMock(side_effect=lambda: next(depths, 2))
+        levels: list[str] = []
+
+        with patch("modules.broker.rabbitmq.consumer.logger") as fake_logger:
+            fake_logger.log.side_effect = lambda level, msg, *a: levels.append(level)
+            # Один непрерывный цикл: перезапуск сторожа сбросил бы предыдущее
+            # значение и сделал бы проверку эскалации бессмысленной.
+            task = asyncio.create_task(consumer._dlq_watch_loop(0.05))
+            await asyncio.sleep(0.17)
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+        self.assertEqual(levels[:3], ["CRITICAL", "WARNING", "CRITICAL"])
 
     async def test_watch_stops_on_stop_event(self):
         consumer = build_consumer(dlq_check_interval_secs=60)
@@ -161,6 +216,97 @@ class DlqWatchTest(unittest.IsolatedAsyncioTestCase):
         consumer._stop_event.set()
         await asyncio.wait_for(task, timeout=2)
         self.assertTrue(task.done())
+
+
+class DlqWatchLifecycleTest(unittest.IsolatedAsyncioTestCase):
+    """Мутационные дыры: сторож можно было выключить целиком незаметно."""
+
+    async def test_start_launches_the_watch(self):
+        consumer = build_consumer(dlq_check_interval_secs=60)
+        consumer._queue = MagicMock()
+        consumer._queue.consume = AsyncMock(return_value="tag")
+
+        await consumer.start()
+        try:
+            self.assertIsNotNone(consumer._dlq_watch_task)
+            self.assertFalse(consumer._dlq_watch_task.done())
+        finally:
+            await consumer._stop_dlq_watch()
+
+    async def test_start_does_not_launch_second_watch(self):
+        consumer = build_consumer(dlq_check_interval_secs=60)
+        consumer._start_dlq_watch()
+        first = consumer._dlq_watch_task
+        consumer._start_dlq_watch()
+        try:
+            self.assertIs(consumer._dlq_watch_task, first)
+        finally:
+            await consumer._stop_dlq_watch()
+
+    async def test_stop_cancels_the_watch(self):
+        """Иначе задача переживает остановку и продолжает ходить в брокер."""
+        consumer = build_consumer(dlq_check_interval_secs=60)
+        consumer._start_dlq_watch()
+        task = consumer._dlq_watch_task
+
+        await consumer.stop()
+
+        self.assertTrue(task.done())
+        self.assertIsNone(consumer._dlq_watch_task)
+
+
+class ConnectionLossTest(unittest.IsolatedAsyncioTestCase):
+    """Обрыв соединения возвращает сообщение в очередь — дубль недопустим."""
+
+    async def test_orphaned_tasks_are_cancelled_on_connection_loss(self):
+        consumer = build_consumer()
+        started = asyncio.Event()
+
+        async def long_work():
+            started.set()
+            await asyncio.sleep(30)
+
+        task = asyncio.create_task(long_work())
+        consumer._tasks.add(task)
+        await started.wait()
+
+        consumer._on_connection_closed()
+        await asyncio.sleep(0)
+
+        self.assertTrue(task.cancelled() or task.cancelling())
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    async def test_planned_stop_does_not_cancel_tasks(self):
+        """При штатной остановке задачи гасит stop() со своим grace-периодом."""
+        consumer = build_consumer()
+        task = asyncio.create_task(asyncio.sleep(0.05))
+        consumer._tasks.add(task)
+        consumer._stopping = True
+
+        consumer._on_connection_closed()
+        await task
+
+        self.assertFalse(task.cancelled())
+
+
+class ConsumerHealthTest(unittest.IsolatedAsyncioTestCase):
+    async def test_health_is_false_when_connected_but_not_consuming(self):
+        """Главное обещание: не потребляем — значит больны, даже если живы."""
+        consumer = build_consumer()
+        alive = MagicMock()
+        alive.is_closed = False
+        consumer._connection = alive
+        consumer._channel = alive
+        consumer._started = False
+
+        self.assertFalse(await consumer.health())
+
+        consumer._started = True
+        self.assertTrue(await consumer.health())
 
 
 if __name__ == "__main__":
