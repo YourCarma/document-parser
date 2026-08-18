@@ -80,7 +80,7 @@ class WebhookCancellationTokenTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(await token.is_cancelled())
         with self.assertRaises(TaskCancelled):
-            await token.raise_if_cancelled("перевод документа")
+            await token.raise_if_cancelled("translate document")
 
     async def test_token_caches_negative_answer_within_ttl(self):
         webhook = AsyncMock()
@@ -128,7 +128,7 @@ class WebhookCancellationTokenTest(unittest.IsolatedAsyncioTestCase):
         token = WebhookCancellationToken(webhook, "task-key", ttl_secs=60)
 
         self.assertFalse(await token.is_cancelled())
-        await token.raise_if_cancelled("перевод документа")
+        await token.raise_if_cancelled("translate document")
 
     async def test_concurrent_checks_make_single_request(self):
         webhook = AsyncMock()
@@ -151,7 +151,7 @@ class WebhookCancellationTokenTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsInstance(token, NullCancellationToken)
         self.assertFalse(await token.is_cancelled())
-        await token.raise_if_cancelled("перевод документа")
+        await token.raise_if_cancelled("translate document")
         webhook.get_task.assert_not_awaited()
 
 

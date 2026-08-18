@@ -54,14 +54,14 @@ class ProcessPoolHolder:
                 await asyncio.to_thread(old.shutdown, wait=False, cancel_futures=True)
             except Exception as exc:
                 logger.warning(
-                    "ProcessPoolHolder: не удалось погасить сломанный пул: {}",
+                    "ProcessPoolHolder: failed to shut down the broken pool: {}",
                     exc,
                 )
 
             self._executor = ProcessPoolExecutor(max_workers=self._max_workers)
             self._generation += 1
             logger.error(
-                "ProcessPoolHolder: пул процессов пересобран generation={} max_workers={}",
+                "ProcessPoolHolder: process pool rebuilt generation={} max_workers={}",
                 self._generation,
                 self._max_workers,
             )
@@ -80,4 +80,4 @@ class ProcessPoolHolder:
             wait=wait,
             cancel_futures=cancel_futures,
         )
-        logger.info("ProcessPoolHolder: пул процессов остановлен")
+        logger.info("ProcessPoolHolder: process pool stopped")

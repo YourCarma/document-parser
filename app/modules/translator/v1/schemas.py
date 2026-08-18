@@ -67,7 +67,7 @@ class TranslatorRequest(BaseModel):
     @classmethod
     def is_allowed_mime_typy(cls, file: UploadFile) -> UploadFile:
         logger.debug(
-            "Проверка входного файла переводчика: filename='{}' mime='{}' size={}",
+            "Validating the translator input file: filename='{}' mime='{}' size={}",
             file.filename,
             file.content_type,
             file.size,
@@ -75,7 +75,7 @@ class TranslatorRequest(BaseModel):
         if file.content_type not in settings.ALLOWED_MIME_TYPES:
             file_extension = file.filename.split(".")[-1]
             raise ContentNotSupportedError(f"Данный формат файла \"{file_extension}\" не поддерживается")
-        logger.debug("MIME type поддерживается: filename='{}'", file.filename)
+        logger.debug("MIME type is supported: filename='{}'", file.filename)
         return file
 
 class TranslatorTextResponse(BaseModel):

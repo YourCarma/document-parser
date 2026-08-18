@@ -77,8 +77,8 @@ class AppRuntime:
             if self.http_session is not None and not self.http_session.closed:
                 await self.http_session.close()
         except Exception as exc:
-            logger.warning("Runtime: не удалось закрыть HTTP-сессию: {}", exc)
+            logger.warning("Runtime: failed to close the HTTP session: {}", exc)
         try:
             await self.executor.shutdown(wait=True, cancel_futures=True)
         except Exception as exc:
-            logger.warning("Runtime: не удалось погасить пул процессов: {}", exc)
+            logger.warning("Runtime: failed to shut down the process pool: {}", exc)

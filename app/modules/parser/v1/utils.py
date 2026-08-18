@@ -152,7 +152,7 @@ async def run_in_process(fn, app_executor, *args, semaphore=None, retries: int =
                 ) from exc
             await app_executor.rebuild(executor)
             logger.error(
-                "run_in_process: воркер парсинга умер, пул пересобран "
+                "run_in_process: parsing worker died, pool rebuilt "
                 "attempt={} fn='{}'",
                 attempt + 1,
                 getattr(fn, "__name__", fn),
@@ -242,14 +242,14 @@ def _kill_soffice_process_group(proc: subprocess.Popen) -> None:
     try:
         pgid = os.getpgid(proc.pid)
     except ProcessLookupError:
-        logger.debug("soffice: процесс уже завершился до отправки сигнала")
+        logger.debug("soffice: the process had already exited before the signal was sent")
         return
 
     if pgid != proc.pid:
         # setsid не успел отработать (гонка на старте) — группа чужая,
         # бить по ней нельзя, иначе заденем посторонние процессы.
         logger.debug(
-            "soffice: pgid={} не совпадает с pid={}, убиваю только процесс",
+            "soffice: pgid={} does not match pid={}, killing the process only",
             pgid,
             proc.pid,
         )
@@ -260,7 +260,7 @@ def _kill_soffice_process_group(proc: subprocess.Popen) -> None:
     try:
         os.killpg(pgid, signal.SIGTERM)
     except ProcessLookupError:
-        logger.debug("soffice: группа {} уже завершилась", pgid)
+        logger.debug("soffice: group {} had already exited", pgid)
         return
 
     try:
@@ -272,6 +272,6 @@ def _kill_soffice_process_group(proc: subprocess.Popen) -> None:
     try:
         os.killpg(pgid, signal.SIGKILL)
     except ProcessLookupError:
-        logger.debug("soffice: группа {} завершилась между SIGTERM и SIGKILL", pgid)
+        logger.debug("soffice: group {} exited between SIGTERM and SIGKILL", pgid)
         return
     proc.wait()

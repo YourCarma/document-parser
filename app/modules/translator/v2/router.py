@@ -136,7 +136,7 @@ async def translate_file_to_word_v2(
     )
 
     logger.info(
-        "TranslatorV2: задача поставлена в очередь task_id='{}' user_id='{}'",
+        "TranslatorV2: task enqueued task_id='{}' user_id='{}'",
         task_id,
         x_user_id,
     )

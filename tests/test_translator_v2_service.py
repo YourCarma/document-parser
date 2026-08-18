@@ -450,7 +450,7 @@ class TranslatorV2ServiceTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(status, TaskStatus.ERROR)
         self.assertIs(service.last_error, failure)
-        self.assertEqual(service.last_stage, "загрузка оригинального файла")
+        self.assertEqual(service.last_stage, "upload original file")
 
     async def test_source_release_is_called_in_finally(self):
         webhook = AsyncMock()

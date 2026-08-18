@@ -51,7 +51,7 @@ class WatchtowerService:
                         f"bucket='{bucket}' prefix='{prefix}': {body}"
                     )
                 logger.debug(
-                    "Watchtower: папка подготовлена bucket='{}' prefix='{}' status={}",
+                    "Watchtower: folder prepared bucket='{}' prefix='{}' status={}",
                     bucket,
                     prefix,
                     resp.status,
@@ -97,7 +97,7 @@ class WatchtowerService:
                             f"bucket='{bucket}' file='{safe_filename}': {body}"
                         )
                     logger.info(
-                        "Watchtower: файл загружен bucket='{}' prefix='{}' filename='{}'",
+                        "Watchtower: file uploaded bucket='{}' prefix='{}' filename='{}'",
                         bucket,
                         normalized_prefix,
                         safe_filename,
@@ -192,7 +192,7 @@ class WatchtowerService:
                 ) from exc
 
             logger.info(
-                "Watchtower: файл скачан bucket='{}' file='{}' dest='{}' bytes={}",
+                "Watchtower: file downloaded bucket='{}' file='{}' dest='{}' bytes={}",
                 bucket,
                 file_path,
                 dest,
@@ -225,7 +225,7 @@ class WatchtowerService:
                 url = data.get("message", "")
                 url = self._apply_shared_prefix(url)
                 logger.info(
-                    "Watchtower: получена share-ссылка bucket='{}' file_path='{}'",
+                    "Watchtower: share link received bucket='{}' file_path='{}'",
                     bucket,
                     file_path,
                 )

@@ -63,8 +63,8 @@ class WebhookManagerService:
                     break
                 delay = _RETRY_BASE_DELAY_SECS * 2 ** attempt
                 logger.warning(
-                    "WebhookManager: {} — попытка {}/{} не удалась ({}), "
-                    "повтор через {:.1f} с",
+                    "WebhookManager: {} — attempt {}/{} failed ({}), "
+                    "retrying in {:.1f}s",
                     description,
                     attempt + 1,
                     attempts,
@@ -73,7 +73,7 @@ class WebhookManagerService:
                 )
                 await asyncio.sleep(delay)
         logger.error(
-            "WebhookManager: {} — попытки исчерпаны ({}): {}",
+            "WebhookManager: {} — retries exhausted ({}): {}",
             description,
             attempts,
             last_exc,
@@ -113,7 +113,7 @@ class WebhookManagerService:
                         f"WebhookManager create_task вернул [{resp.status}] "
                         f"для key='{key}': {body}"
                     )
-                logger.info("WebhookManager: задача создана key='{}'", key)
+                logger.info("WebhookManager: task created key='{}'", key)
         await self._with_retries(request, f"create_task key='{key}'")
         return key
 
@@ -192,7 +192,7 @@ class WebhookManagerService:
             raise
         except Exception as exc:
             logger.warning(
-                "WebhookManager update_response_data не удалось key='{}': {}",
+                "WebhookManager update_response_data failed key='{}': {}",
                 key,
                 exc,
             )

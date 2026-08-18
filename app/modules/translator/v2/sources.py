@@ -82,4 +82,4 @@ class WatchtowerSource(SourceFileProviderABC):
             return
         # Синхронно: release() обязан отработать и под CancelledError.
         shutil.rmtree(self._dir, ignore_errors=True)
-        logger.debug("WatchtowerSource: временный каталог удалён '{}'", self._dir)
+        logger.debug("WatchtowerSource: temporary directory removed '{}'", self._dir)

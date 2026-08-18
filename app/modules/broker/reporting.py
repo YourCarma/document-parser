@@ -32,7 +32,7 @@ async def _merged_response_data(
         raise
     except Exception as exc:
         logger.warning(
-            "Broker: не удалось прочитать response_data key='{}': {}", task_key, exc
+            "Broker: failed to read response_data key='{}': {}", task_key, exc
         )
     return {**current, **updates}
 
@@ -50,7 +50,7 @@ async def report_task_error(
         await webhook.update_progress(task_key, progress, TaskStatus.ERROR)
         await webhook.update_response_data(task_key, merged)
         logger.info(
-            "Broker: опубликована ошибка задачи key='{}' message='{}'",
+            "Broker: task error published key='{}' message='{}'",
             task_key,
             message,
         )
@@ -58,7 +58,7 @@ async def report_task_error(
         raise
     except Exception as exc:
         logger.warning(
-            "Broker: не удалось опубликовать ошибку задачи key='{}': {}",
+            "Broker: failed to publish task error key='{}': {}",
             task_key,
             exc,
         )
@@ -77,7 +77,7 @@ async def report_task_retry(
         await webhook.update_progress(task_key, 0, TaskStatus.PROCESSING)
         await webhook.update_response_data(task_key, merged)
         logger.info(
-            "Broker: задача возвращена в PROCESSING перед повтором key='{}' {}/{}",
+            "Broker: task moved back to PROCESSING before retry key='{}' {}/{}",
             task_key,
             attempt,
             total,
@@ -86,7 +86,7 @@ async def report_task_retry(
         raise
     except Exception as exc:
         logger.warning(
-            "Broker: не удалось опубликовать повтор задачи key='{}': {}",
+            "Broker: failed to publish task retry key='{}': {}",
             task_key,
             exc,
         )

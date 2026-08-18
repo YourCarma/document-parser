@@ -108,7 +108,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
             try:
                 await self._connection.close()
             except Exception as exc:
-                logger.debug("Broker: закрытие мёртвого соединения: {}", exc)
+                logger.debug("Broker: closing dead connection: {}", exc)
             self._connection = None
             self._callbacks_attached = False
 
@@ -129,7 +129,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
             )
         except Exception as exc:
             logger.critical(
-                "Broker: не удалось подключиться к {}: {}", cfg.safe_url, exc
+                "Broker: failed to connect to {}: {}", cfg.safe_url, exc
             )
             raise
 
@@ -148,12 +148,12 @@ class RabbitMQConsumer(BrokerConsumerABC):
             # без флага колбэки копились бы с каждым вызовом connect().
             self._connection.close_callbacks.add(self._on_connection_closed)
             self._connection.reconnect_callbacks.add(
-                lambda *_: logger.info("Broker: соединение с брокером восстановлено")
+                lambda *_: logger.info("Broker: connection to the broker restored")
             )
             self._callbacks_attached = True
 
         logger.info(
-            "Broker: подключён url='{}' exchange='{}' queue='{}' routing_keys={} "
+            "Broker: connected url='{}' exchange='{}' queue='{}' routing_keys={} "
             "prefetch={}",
             cfg.safe_url,
             cfg.exchange,
@@ -162,7 +162,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
             cfg.prefetch_count,
         )
         logger.info(
-            "Broker: формат ключа задачи '{{user_id}}:{}:{{task_id}}'",
+            "Broker: task key format '{{user_id}}:{}:{{task_id}}'",
             service_segment_for(TaskType.TRANSLATE.value),
         )
 
@@ -200,9 +200,9 @@ class RabbitMQConsumer(BrokerConsumerABC):
         except Exception as exc:
             self._dlq_ready = False
             logger.critical(
-                "Broker: не удалось объявить DLX/DLQ ('{}'/'{}'): {}. Сообщения с "
-                "постоянными ошибками сохранить будет некуда — они останутся "
-                "неподтверждёнными и будут возвращаться в рабочую очередь",
+                "Broker: failed to declare DLX/DLQ ('{}'/'{}'): {}. There will be "
+                "nowhere to park permanently failing messages — they will stay "
+                "unacknowledged and keep returning to the work queue",
                 cfg.dlx,
                 cfg.dlq,
                 exc,
@@ -231,9 +231,10 @@ class RabbitMQConsumer(BrokerConsumerABC):
         except Exception as exc:
             self._retry_queue_ready = False
             logger.critical(
-                "Broker: не удалось объявить retry-очередь '{}': {}. Вероятно, она "
-                "создана с другими аргументами — удалите её и перезапустите сервис. "
-                "До этого повторы идут через nack(requeue) без счётчика попыток",
+                "Broker: failed to declare the retry queue '{}': {}. It was probably "
+                "created with different arguments — delete it and restart the "
+                "service. Until then retries go through nack(requeue) with no "
+                "attempt counter",
                 cfg.retry_queue,
                 exc,
             )
@@ -253,8 +254,8 @@ class RabbitMQConsumer(BrokerConsumerABC):
             await self._channel.declare_exchange(cfg.exchange, passive=True)
         except Exception as exc:
             logger.critical(
-                "Broker: exchange '{}' не найден ({}). Его создаёт task_gateway — "
-                "проверьте RMQ_EXCHANGE или очередность развёртывания",
+                "Broker: exchange '{}' not found ({}). It is created by task_gateway — "
+                "check RMQ_EXCHANGE or the deployment order",
                 cfg.exchange,
                 exc,
             )
@@ -264,8 +265,8 @@ class RabbitMQConsumer(BrokerConsumerABC):
             return await self._channel.declare_queue(cfg.queue, passive=True)
         except Exception as exc:
             logger.critical(
-                "Broker: очередь '{}' не найдена ({}). Её должен создать "
-                "task_gateway — проверьте RMQ_QUEUE или очередность развёртывания",
+                "Broker: queue '{}' not found ({}). It must be created by "
+                "task_gateway — check RMQ_QUEUE or the deployment order",
                 cfg.queue,
                 exc,
             )
@@ -279,9 +280,9 @@ class RabbitMQConsumer(BrokerConsumerABC):
             await self._declare_own_objects()
         else:
             logger.warning(
-                "Broker: служебные объекты не объявляются "
-                "(RMQ_DECLARE_TOPOLOGY=false). Повторы пойдут через "
-                "nack(requeue) без счётчика, копии в DLQ публиковаться не будут"
+                "Broker: service objects are not declared "
+                "(RMQ_DECLARE_TOPOLOGY=false). Retries will go through "
+                "nack(requeue) with no counter, DLQ copies will not be published"
             )
 
         queue = await self._check_foreign_topology()
@@ -289,20 +290,20 @@ class RabbitMQConsumer(BrokerConsumerABC):
         self._queue = queue
         declaration = getattr(queue, "declaration_result", None)
         logger.info(
-            "Broker: топология готова exchange='{}' queue='{}' messages={} "
+            "Broker: topology ready exchange='{}' queue='{}' messages={} "
             "consumers={} dlq={} retry={}",
             cfg.exchange,
             cfg.queue,
             getattr(declaration, "message_count", "?"),
             getattr(declaration, "consumer_count", "?"),
-            "ok" if self._dlq_ready else "недоступна",
-            "ok" if self._retry_queue_ready else "недоступна",
+            "ok" if self._dlq_ready else "unavailable",
+            "ok" if self._retry_queue_ready else "unavailable",
         )
         # Exchange, его тип и биндинг — забота гейтвея. Печатаем ожидания,
         # чтобы расхождение с продюсером было видно в логе, а не в тишине.
         logger.info(
-            "Broker: ожидается exchange типа '{}' с ключами {} (объявление и "
-            "биндинг — на стороне продюсера)",
+            "Broker: expecting an exchange of type '{}' with keys {} (declaring and "
+            "binding are the producer's job)",
             cfg.exchange_type,
             list(cfg.routing_keys),
         )
@@ -319,7 +320,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
         )
         self._started = True
         logger.success(
-            "Broker: потребление начато queue='{}' consumer_tag='{}'",
+            "Broker: consuming started queue='{}' consumer_tag='{}'",
             self._config.queue,
             self._consumer_tag,
         )
@@ -336,11 +337,11 @@ class RabbitMQConsumer(BrokerConsumerABC):
                 try:
                     await self._queue.cancel(self._consumer_tag)
                 except Exception as exc:
-                    logger.warning("Broker: не удалось отменить подписку: {}", exc)
+                    logger.warning("Broker: failed to cancel the subscription: {}", exc)
 
             if self._tasks:
                 logger.info(
-                    "Broker: ожидаю завершения {} активных задач (grace={}s)",
+                    "Broker: waiting for {} active tasks to finish (grace={}s)",
                     len(self._tasks),
                     self._config.shutdown_grace_secs,
                 )
@@ -350,8 +351,8 @@ class RabbitMQConsumer(BrokerConsumerABC):
                 if pending:
                     # Не подтверждаем: брокер сам вернёт сообщения в очередь.
                     logger.warning(
-                        "Broker: {} задач не успели завершиться, отменяю — "
-                        "сообщения вернутся в очередь",
+                        "Broker: {} tasks did not finish in time, cancelling them — "
+                        "their messages will return to the queue",
                         len(pending),
                     )
                     for task in pending:
@@ -361,7 +362,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
             if self._connection is not None and not self._connection.is_closed:
                 await self._connection.close()
         except Exception as exc:
-            logger.error("Broker: ошибка при остановке консюмера: {}", exc)
+            logger.error("Broker: error while stopping the consumer: {}", exc)
         finally:
             self._connection = None
             self._channel = None
@@ -392,7 +393,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
         Отменяем: путь отмены в `_process_message` ничего не подтверждает и не
         публикует, сообщение переиграется одной копией.
         """
-        logger.warning("Broker: соединение с брокером закрыто")
+        logger.warning("Broker: connection to the broker closed")
         if self._stopping:
             # Штатная остановка: задачи гасит stop() со своим grace-периодом.
             return
@@ -400,8 +401,8 @@ class RabbitMQConsumer(BrokerConsumerABC):
         if not orphans:
             return
         logger.critical(
-            "Broker: обрыв соединения во время обработки — снимаю {} задач, "
-            "их сообщения уже возвращены брокером в очередь",
+            "Broker: connection lost while processing — cancelling {} tasks, "
+            "the broker has already requeued their messages",
             len(orphans),
         )
         for task in orphans:
@@ -452,7 +453,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
             raise
         except Exception as exc:
             logger.warning(
-                "Broker: не удалось опросить DLQ '{}': {}", self._config.dlq, exc
+                "Broker: failed to poll the DLQ '{}': {}", self._config.dlq, exc
             )
             return -1
 
@@ -477,8 +478,8 @@ class RabbitMQConsumer(BrokerConsumerABC):
         exc = task.exception()
         if exc is not None:
             logger.critical(
-                "Broker: сторож DLQ упал с '{}' — непустая DLQ больше не будет "
-                "замечена до перезапуска сервиса",
+                "Broker: DLQ watchdog crashed with '{}' — a non-empty DLQ will go "
+                "unnoticed until the service is restarted",
                 exc,
             )
 
@@ -495,7 +496,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
             if asyncio.current_task() is not None and asyncio.current_task().cancelling():
                 raise
         except Exception as exc:
-            logger.warning("Broker: сторож DLQ завершился с ошибкой: {}", exc)
+            logger.warning("Broker: DLQ watchdog exited with an error: {}", exc)
 
     async def _dlq_watch_loop(self, interval: int) -> None:
         """Периодически смотреть в DLQ и кричать, если она непустая.
@@ -527,13 +528,13 @@ class RabbitMQConsumer(BrokerConsumerABC):
                 level = "CRITICAL" if depth != previous else "WARNING"
                 logger.log(
                     level,
-                    "Broker: в DLQ '{}' лежит {} сообщений — задачи не выполнены "
-                    "и требуют ручного разбора",
+                    "Broker: DLQ '{}' holds {} messages — those tasks did not complete "
+                    "and need manual triage",
                     self._config.dlq,
                     depth,
                 )
             elif depth == 0 and previous > 0:
-                logger.success("Broker: DLQ '{}' разобрана", self._config.dlq)
+                logger.success("Broker: DLQ '{}' is drained", self._config.dlq)
             previous = depth
 
     # --- обработка сообщений --------------------------------------------
@@ -563,8 +564,9 @@ class RabbitMQConsumer(BrokerConsumerABC):
         exc = task.exception()
         if exc is not None:
             logger.error(
-                "Broker: обработка сообщения завершилась необработанной ошибкой "
-                "'{}': {}. Сообщение не подтверждено и вернётся в очередь",
+                "Broker: message processing failed with an unhandled error "
+                "'{}': {}. The message is not acknowledged and will return to "
+                "the queue",
                 type(exc).__name__,
                 exc,
             )
@@ -578,11 +580,11 @@ class RabbitMQConsumer(BrokerConsumerABC):
             task_key = build_task_key(envelope)
             if payload_user_id_differs(envelope):
                 logger.warning(
-                    "Broker: payload.user_id отличается от конверта key='{}'",
+                    "Broker: payload.user_id differs from the envelope key='{}'",
                     task_key,
                 )
             logger.info(
-                "Broker: сообщение получено key='{}' task_type='{}' attempt={} "
+                "Broker: message received key='{}' task_type='{}' attempt={} "
                 "redelivered={}",
                 task_key,
                 envelope.task_type,
@@ -597,7 +599,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
             # SIGTERM. Ничего не ack-аем и не публикуем: сообщение вернётся в
             # очередь и переиграется на другой реплике.
             logger.warning(
-                "Broker: обработка прервана остановкой сервиса key='{}'", task_key
+                "Broker: processing interrupted by service shutdown key='{}'", task_key
             )
             raise
         except Exception as exc:
@@ -608,15 +610,15 @@ class RabbitMQConsumer(BrokerConsumerABC):
         # ack только после терминального статуса, который опубликовал конвейер.
         await self._safe_ack(message)
         logger.success(
-            "Broker: задача завершена key='{}' status='{}' elapsed={:.1f}s",
+            "Broker: task finished key='{}' status='{}' elapsed={:.1f}s",
             task_key,
             outcome.status,
             elapsed,
         )
         if elapsed > self._config.ack_deadline_secs:
             logger.critical(
-                "Broker: обработка заняла {:.0f}s при ack-дедлайне {}s — брокер "
-                "мог уже отозвать доставку (consumer_timeout)",
+                "Broker: processing took {:.0f}s against an ack deadline of {}s — the "
+                "broker may have already revoked the delivery (consumer_timeout)",
                 elapsed,
                 self._config.ack_deadline_secs,
             )
@@ -637,7 +639,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
             if decision.report and task_key and decision.public_message:
                 await report_task_error(webhook, task_key, decision.public_message)
             logger.info(
-                "Broker: сообщение подтверждено без повтора key='{}': {}",
+                "Broker: message acknowledged without retry key='{}': {}",
                 task_key,
                 exc,
             )
@@ -650,7 +652,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
             and next_attempt <= self._config.max_retries
         ):
             logger.warning(
-                "Broker: временный сбой key='{}' попытка {}/{}: {}",
+                "Broker: transient failure key='{}' attempt {}/{}: {}",
                 task_key,
                 next_attempt,
                 self._config.max_retries,
@@ -667,8 +669,8 @@ class RabbitMQConsumer(BrokerConsumerABC):
         if decision.action is MessageAction.RETRY:
             public, report = MSG_UPSTREAM_UNAVAILABLE, True
             logger.error(
-                "Broker: попытки исчерпаны key='{}' (провалено попыток: {}, "
-                "лимит повторов: {}): {}",
+                "Broker: retries exhausted key='{}' (failed attempts: {}, "
+                "retry limit: {}): {}",
                 task_key,
                 next_attempt,
                 self._config.max_retries,
@@ -678,8 +680,8 @@ class RabbitMQConsumer(BrokerConsumerABC):
             public, report = decision.public_message, decision.report
             log = getattr(logger, decision.log_level, logger.error)
             log(
-                "Broker: сообщение отправлено в DLQ key='{}' error='{}'",
-                task_key or "<нет ключа>",
+                "Broker: message sent to the DLQ key='{}' error='{}'",
+                task_key or "<no key>",
                 exc,
             )
 
@@ -687,8 +689,8 @@ class RabbitMQConsumer(BrokerConsumerABC):
             await report_task_error(webhook, task_key, public)
         if not task_key:
             logger.critical(
-                "Broker: конверт не разобран, сообщить пользователю некуда. "
-                "body_head='{}'",
+                "Broker: envelope could not be parsed, nowhere to report back to the "
+                "user. body_head='{}'",
                 message.body[:200],
             )
 
@@ -700,9 +702,9 @@ class RabbitMQConsumer(BrokerConsumerABC):
             return
 
         logger.critical(
-            "Broker: не удалось сохранить сообщение в DLQ key='{}' — оставляю "
-            "его неподтверждённым, оно вернётся в очередь",
-            task_key or "<нет ключа>",
+            "Broker: failed to park the message in the DLQ key='{}' — leaving it "
+            "unacknowledged, it will return to the queue",
+            task_key or "<no key>",
         )
         await self._delay_before_requeue()
         await self._safe_nack(message, requeue=True)
@@ -722,7 +724,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
         cfg = self._config
         if not cfg.dlq or not self._dlq_ready:
             logger.error(
-                "Broker: DLQ '{}' недоступна, сохранить сообщение некуда", cfg.dlq
+                "Broker: DLQ '{}' is unavailable, nowhere to park the message", cfg.dlq
             )
             return False
 
@@ -747,9 +749,9 @@ class RabbitMQConsumer(BrokerConsumerABC):
             self._dlq_ready = False
             return False
         logger.info(
-            "Broker: сообщение сохранено в DLQ '{}' key='{}'",
+            "Broker: message parked in the DLQ '{}' key='{}'",
             cfg.dlq,
-            task_key or "<нет ключа>",
+            task_key or "<no key>",
         )
         return True
 
@@ -769,7 +771,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
             raise
         except Exception as exc:
             logger.error(
-                "Broker: публикация в очередь '{}' не удалась: {}", routing_key, exc
+                "Broker: publishing to the queue '{}' failed: {}", routing_key, exc
             )
             return False
 
@@ -778,9 +780,9 @@ class RabbitMQConsumer(BrokerConsumerABC):
 
         delivery = getattr(result, "delivery", result)
         logger.critical(
-            "Broker: брокер не принял копию сообщения в очередь '{}' (ответ {}). "
-            "Скорее всего очередь удалена или пересоздана на ходу — создайте её "
-            "заново и перезапустите сервис",
+            "Broker: the broker rejected the message copy for the queue '{}' "
+            "(response {}). The queue was most likely deleted or recreated on "
+            "the fly — recreate it and restart the service",
             routing_key,
             type(delivery).__name__,
         )
@@ -839,15 +841,15 @@ class RabbitMQConsumer(BrokerConsumerABC):
         if not delay:
             return
         logger.info(
-            "Broker: пауза {}s перед возвратом сообщения в очередь "
-            "(retry-очередь недоступна)",
+            "Broker: pausing {}s before returning the message to the queue "
+            "(retry queue unavailable)",
             delay,
         )
         try:
             await asyncio.wait_for(self._stop_event.wait(), timeout=delay)
         except (asyncio.TimeoutError, TimeoutError):
             return
-        logger.info("Broker: пауза прервана остановкой сервиса")
+        logger.info("Broker: pause interrupted by service shutdown")
 
     # --- подтверждения ---------------------------------------------------
 
@@ -858,8 +860,8 @@ class RabbitMQConsumer(BrokerConsumerABC):
             raise
         except Exception as exc:
             logger.error(
-                "Broker: не удалось подтвердить сообщение (канал мог быть закрыт "
-                "брокером по consumer_timeout): {}",
+                "Broker: failed to acknowledge the message (the channel may have been "
+                "closed by the broker on consumer_timeout): {}",
                 exc,
             )
 
@@ -870,8 +872,8 @@ class RabbitMQConsumer(BrokerConsumerABC):
             raise
         except Exception as exc:
             logger.error(
-                "Broker: не удалось вернуть сообщение в очередь (канал мог быть "
-                "закрыт брокером по consumer_timeout): {}",
+                "Broker: failed to return the message to the queue (the channel may "
+                "have been closed by the broker on consumer_timeout): {}",
                 exc,
             )
 

@@ -62,7 +62,7 @@ async def translate_file_to_text(
         source_language = translator_data.source_language
         target_language = translator_data.target_language
         logger.debug(
-            "TranslatorV1: входной запрос source='{}' target='{}'",
+            "TranslatorV1: incoming request source='{}' target='{}'",
             source_language,
             target_language,
         )
@@ -98,7 +98,7 @@ async def translate_file_to_text(
         translated = await translator.translate_docling(ParserMods.TO_TEXT, parsed)
         return TranslatorTextResponse(parsed_text=translated)
     except Exception as e:
-        logger.error(f"Ошибка синхронного перевода в текст: {e}")
+        logger.error(f"Synchronous translation into text failed: {e}")
         raise
     finally:
         await delete_file(file_path)
@@ -148,7 +148,7 @@ async def translate_file_to_file(
         source_language = translator_data.source_language
         target_language = translator_data.target_language
         logger.debug(
-            "TranslatorV1: входной запрос source='{}' target='{}'",
+            "TranslatorV1: incoming request source='{}' target='{}'",
             source_language,
             target_language,
         )
@@ -189,7 +189,7 @@ async def translate_file_to_file(
             background=file_cleanup_task(translated_path),
         )
     except Exception as e:
-        logger.error(f"Ошибка синхронного перевода в .md: {e}")
+        logger.error(f"Synchronous translation into .md failed: {e}")
         if translated_path is not None:
             await delete_file(translated_path)
         raise
@@ -241,7 +241,7 @@ async def translate_file_to_word(
         source_language = translator_data.source_language
         target_language = translator_data.target_language
         logger.debug(
-            "TranslatorV1: входной запрос source='{}' target='{}'",
+            "TranslatorV1: incoming request source='{}' target='{}'",
             source_language,
             target_language,
         )
@@ -282,7 +282,7 @@ async def translate_file_to_word(
             background=file_cleanup_task(translated_path),
         )
     except Exception as e:
-        logger.error(f"Ошибка синхронного перевода в .docx: {e}")
+        logger.error(f"Synchronous translation into .docx failed: {e}")
         if translated_path is not None:
             await delete_file(translated_path)
         raise

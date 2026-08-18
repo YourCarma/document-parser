@@ -174,13 +174,13 @@ class TranslateHandlerTest(unittest.IsolatedAsyncioTestCase):
         cause = WatchtowerUnavailable("хранилище недоступно")
 
         with self._patch_pipeline(
-            status=TaskStatus.ERROR, last_error=cause, last_stage="парсинг документа"
+            status=TaskStatus.ERROR, last_error=cause, last_stage="parse document"
         ):
             with self.assertRaises(TaskPipelineFailed) as ctx:
                 await self._handle()
 
         self.assertIs(ctx.exception.cause, cause)
-        self.assertEqual(ctx.exception.stage, "парсинг документа")
+        self.assertEqual(ctx.exception.stage, "parse document")
 
     async def test_handler_invalid_payload_raises_typed_error(self):
         env = parse_envelope(

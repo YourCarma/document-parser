@@ -85,7 +85,7 @@ class WebhookCancellationToken(CancellationTokenABC):
             except Exception as exc:
                 # Сбой опроса — не повод убивать задачу.
                 logger.warning(
-                    "Cancellation: не удалось проверить отмену key='{}': {}",
+                    "Cancellation: failed to check for cancellation key='{}': {}",
                     self.task_key,
                     exc,
                 )
@@ -94,7 +94,7 @@ class WebhookCancellationToken(CancellationTokenABC):
 
             if task is None:
                 logger.warning(
-                    "Cancellation: задача не найдена в webhook_manager key='{}'",
+                    "Cancellation: task not found in webhook_manager key='{}'",
                     self.task_key,
                 )
                 self._checked_at = time.monotonic()
@@ -102,7 +102,7 @@ class WebhookCancellationToken(CancellationTokenABC):
 
             if task.progress.status == TaskStatus.CANCELLED:
                 self._cancelled = True
-                logger.info("Cancellation: задача отменена key='{}'", self.task_key)
+                logger.info("Cancellation: task cancelled key='{}'", self.task_key)
                 return True
 
             self._checked_at = time.monotonic()

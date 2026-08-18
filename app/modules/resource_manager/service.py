@@ -64,7 +64,7 @@ class ResourceManagerService:
                 if personal_resources:
                     bucket = personal_resources[0].id
                     logger.info(
-                        "ResourceManager: найден персональный bucket "
+                        "ResourceManager: personal bucket found "
                         "user_id='{}' bucket='{}' resource_name='{}'",
                         user_id,
                         bucket,
@@ -73,8 +73,8 @@ class ResourceManagerService:
                     return bucket
 
                 logger.warning(
-                    "ResourceManager: персональный Document bucket "
-                    "не найден user_id='{}' resources={}",
+                    "ResourceManager: personal Document bucket not found "
+                    "user_id='{}' resources={}",
                     user_id,
                     len(resources),
                 )

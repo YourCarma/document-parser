@@ -32,9 +32,9 @@ def service_segment_for(task_type: str) -> str:
                 if prefix not in _warned:
                     _warned.add(prefix)
                     logger.warning(
-                        "Broker: префикс task_type '{}' не совпадает с "
-                        "SERVICE_NAME '{}'. Ключ задачи собирается по префиксу "
-                        "из сообщения.",
+                        "Broker: task_type prefix '{}' does not match "
+                        "SERVICE_NAME '{}'. The task key is built from the "
+                        "prefix in the message.",
                         prefix,
                         settings.SERVICE_NAME,
                     )

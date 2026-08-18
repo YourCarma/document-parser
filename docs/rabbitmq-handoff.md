@@ -122,7 +122,7 @@ PYTHONPATH=app python3 -m unittest discover -s tests -t tests
    `PRECONDITION_FAILED`, сервис поднимется, но повторы уйдут в деградацию.
 2. **Права пользователя RabbitMQ на configure** для `document-parser.dlx`,
    `document-parser.dlq`, `document-parser.retry`. Без них сервис стартует, но
-   работает в деградации — видно в стартовом логе `Broker: топология готова`.
+   работает в деградации — видно в стартовом логе `Broker: topology ready`.
 3. `document-parser.tasks` и `document-parser.queue` должны существовать **до**
    старта пода — их создаёт гейтвей, сервис их не создаёт принципиально.
 4. `--timeout-graceful-shutdown` в деплойменте воркера ≥ `RMQ_SHUTDOWN_GRACE_SECS`.

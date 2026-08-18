@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI):
                                         /_/
     """
     logger.info(GREETINGS)
-    logger.info("Формат ключа задач webhook_manager: '{{user_id}}:{}:{{task_id}}'",
+    logger.info("webhook_manager task key format: '{{user_id}}:{}:{{task_id}}'",
                 settings.SERVICE_NAME)
     runtime = AppRuntime.create()
     runtime.attach(app)
@@ -45,10 +45,10 @@ async def lifespan(app: FastAPI):
                 raise
             app.state.broker = consumer
         else:
-            logger.info("Broker: отключён (BROKER_ENABLED=false)")
+            logger.info("Broker: disabled (BROKER_ENABLED=false)")
         yield
     finally:
-        logger.info("Остановка сервиса document-parser")
+        logger.info("Shutting down document-parser service")
         if app.state.broker is not None:
             # Сначала консюмер: он пользуется сессией и пулом из runtime.
             await app.state.broker.stop()
@@ -144,7 +144,7 @@ async def health_check(request: Request, response: Response):
     try:
         report = await broker.health_report()
     except Exception as exc:
-        logger.error("Health: не удалось опросить консюмер: {}", exc)
+        logger.error("Health: failed to poll the consumer: {}", exc)
         response.status_code = 503
         return {"status": "Error", "broker": {"healthy": False, "error": str(exc)}}
 

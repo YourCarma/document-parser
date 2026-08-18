@@ -64,12 +64,12 @@ POST /api/v2/parser/translator/file/word  (X-User-ID, файл, языки, па
   └─ BackgroundTasks.add_task(run_translation_task)   -> 200 {task_id, key}
 
 run_translation_task (фон):
-  1. получение бакета пользователя   resource_manager.get_user_bucket
-  2. загрузка оригинального файла    watchtower.upload_file + get_sharelink   -> 5..10 %
-  3. парсинг документа               run_in_process(parse_document, TO_DOCLING) -> 15 %
-                                     под asyncio.timeout(PARSE_TIMEOUT_SECS)
-  4. перевод документа               _translate_with_progress                 -> 15..93 %
-  5. загрузка переведённого файла    watchtower.upload_file + get_sharelink   -> 95 %
+  1. resolve user bucket      resource_manager.get_user_bucket
+  2. upload original file     watchtower.upload_file + get_sharelink     -> 5..10 %
+  3. parse document           run_in_process(parse_document, TO_DOCLING) -> 15 %
+                              под asyncio.timeout(PARSE_TIMEOUT_SECS)
+  4. translate document       _translate_with_progress                   -> 15..93 %
+  5. upload translated file   watchtower.upload_file + get_sharelink     -> 95 %
   6. READY                                                                    -> 100 %
   finally: удалить временный исходник и временный .docx
 ```
@@ -139,7 +139,8 @@ run_translation_task (фон):
 
 ## 6. Обработка ошибок
 
-- `current_stage` — строковый маркер текущего этапа; в `except` он переводится в
+- `current_stage` — строковый маркер текущего этапа (константы `STAGE_*`,
+  английские: значение попадает в логи); в `except` он переводится в
   пользовательское сообщение через `_STAGE_MESSAGES` / `_stage_to_user_message`.
   Технический текст исключения уходит только в лог, наружу идёт этапное сообщение.
 - `_update` (промежуточные публикации 5/10/15/95) — **best-effort**: любое

@@ -114,7 +114,7 @@ class TranslateHandler(TaskHandlerABC):
             task = await webhook.get_task(task_key)
         except Exception as exc:
             logger.warning(
-                "Broker: не удалось прочитать статус задачи key='{}': {}",
+                "Broker: failed to read task status key='{}': {}",
                 task_key,
                 exc,
             )
@@ -122,8 +122,8 @@ class TranslateHandler(TaskHandlerABC):
 
         if task is None:
             logger.warning(
-                "Broker: задача не найдена в webhook_manager key='{}' — вероятно, "
-                "расходится написание SERVICE_NAME с гейтвеем",
+                "Broker: task not found in webhook_manager key='{}' — SERVICE_NAME "
+                "spelling is likely out of sync with the gateway",
                 task_key,
             )
             return None

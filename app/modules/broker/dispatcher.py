@@ -45,8 +45,8 @@ class TaskDispatcher:
         if len(matches) == 1:
             registered, cls = matches[0]
             logger.warning(
-                "Broker: task_type '{}' не совпал точно, сопоставлен по действию "
-                "с '{}' — вероятно, расходится написание имени сервиса",
+                "Broker: task_type '{}' did not match exactly, matched by action "
+                "to '{}' — the service name spelling is likely out of sync",
                 task_type,
                 registered,
             )

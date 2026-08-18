@@ -41,14 +41,22 @@ from modules.webhook_manager.service import WebhookManagerService
 from settings import settings
 
 
+STAGE_INIT = "init"
+STAGE_RESOLVE_BUCKET = "resolve user bucket"
+STAGE_FETCH_SOURCE = "fetch source file"
+STAGE_UPLOAD_ORIGINAL = "upload original file"
+STAGE_PARSE = "parse document"
+STAGE_TRANSLATE = "translate document"
+STAGE_UPLOAD_TRANSLATED = "upload translated file"
+
 _STAGE_MESSAGES: dict[str, str] = {
-    "инициализация": "Ошибка при инициализации задачи",
-    "получение бакета пользователя": "Ошибка при получении ресурсов пользователя",
-    "получение исходного файла": "Ошибка при получении исходного файла",
-    "загрузка оригинального файла": "Ошибка при загрузке оригинального файла в хранилище",
-    "парсинг документа": "Ошибка при обработке документа",
-    "перевод документа": "Ошибка в сервисе переводчика",
-    "загрузка переведённого файла": "Ошибка при загрузке переведённого файла в хранилище",
+    STAGE_INIT: "Ошибка при инициализации задачи",
+    STAGE_RESOLVE_BUCKET: "Ошибка при получении ресурсов пользователя",
+    STAGE_FETCH_SOURCE: "Ошибка при получении исходного файла",
+    STAGE_UPLOAD_ORIGINAL: "Ошибка при загрузке оригинального файла в хранилище",
+    STAGE_PARSE: "Ошибка при обработке документа",
+    STAGE_TRANSLATE: "Ошибка в сервисе переводчика",
+    STAGE_UPLOAD_TRANSLATED: "Ошибка при загрузке переведённого файла в хранилище",
 }
 _TRANSLATION_TIMEOUT_FALLBACK_SUFFIX = " (ошибка запроса, переведите вручную)"
 _UNTRANSLATED_TEXT_STATUS = "Готово. Не переведено элементов: {count}"
@@ -57,7 +65,7 @@ _TIMEOUT_TEXT_STATUS = "Превышено время обработки"
 
 
 def _stage_to_user_message(stage: str) -> str:
-    return _STAGE_MESSAGES.get(stage, f"Ошибка на этапе «{stage}»")
+    return _STAGE_MESSAGES.get(stage, "Ошибка при обработке задачи")
 
 
 # Тип исключения точнее этапа: «файл не найден» полезнее, чем «ошибка при
@@ -141,26 +149,26 @@ class TranslatorV2Service:
             text_status="Получение ресурсов пользователя...",
         )
 
-        current_stage = "инициализация"
+        current_stage = STAGE_INIT
         try:
             async with asyncio.timeout(settings.TASK_TIMEOUT_SECS):
                 await cancellation.raise_if_cancelled("до старта")
 
-                current_stage = "получение бакета пользователя"
+                current_stage = STAGE_RESOLVE_BUCKET
                 bucket = bucket or await self.resource_manager.get_user_bucket(user_id)
                 if not bucket:
                     raise BucketNotFound(user_id)
                 logger.info(
-                    "TranslatorV2: старт задачи task_id='{}' user_id='{}' bucket='{}' source='{}' target='{}'",
+                    "TranslatorV2: task started task_id='{}' user_id='{}' bucket='{}' source='{}' target='{}'",
                     task_id,
                     user_id,
                     bucket,
                     source_language,
                     target_language,
                 )
-                await cancellation.raise_if_cancelled("получение бакета пользователя")
+                await cancellation.raise_if_cancelled(STAGE_RESOLVE_BUCKET)
 
-                current_stage = "получение исходного файла"
+                current_stage = STAGE_FETCH_SOURCE
                 await self._update(
                     task_key, response_data, 5, TaskStatus.PROCESSING,
                     "Готовлю исходный файл...",
@@ -172,7 +180,7 @@ class TranslatorV2Service:
                 # появляется на диске лишь после acquire().
                 parser_params.file_path = Path(file_path)
 
-                current_stage = "загрузка оригинального файла"
+                current_stage = STAGE_UPLOAD_ORIGINAL
                 if source_file.remote_key is None:
                     object_key = await self.watchtower.upload_file(
                         bucket,
@@ -189,11 +197,11 @@ class TranslatorV2Service:
                     task_key, response_data, 10, TaskStatus.PROCESSING,
                     "Оригинал готов. Парсинг документа...",
                 )
-                await cancellation.raise_if_cancelled("загрузка оригинального файла")
+                await cancellation.raise_if_cancelled(STAGE_UPLOAD_ORIGINAL)
 
-                current_stage = "парсинг документа"
+                current_stage = STAGE_PARSE
                 logger.debug(
-                    "TranslatorV2: этап='{}' task_id='{}' filename='{}'",
+                    "TranslatorV2: stage='{}' task_id='{}' filename='{}'",
                     current_stage,
                     task_id,
                     original_filename,
@@ -211,7 +219,7 @@ class TranslatorV2Service:
                     # Отменяется только ожидание: воркер парсинга останется
                     # занят до конца конвертации, слот семафора вернётся раньше.
                     logger.error(
-                        "TranslatorV2: парсинг превысил PARSE_TIMEOUT_SECS "
+                        "TranslatorV2: parsing exceeded PARSE_TIMEOUT_SECS "
                         "task_id='{}' timeout={}",
                         task_id,
                         settings.PARSE_TIMEOUT_SECS,
@@ -219,13 +227,13 @@ class TranslatorV2Service:
                     raise TaskTimeout(
                         "Парсинг документа превысил PARSE_TIMEOUT_SECS"
                     ) from exc
-                await cancellation.raise_if_cancelled("парсинг документа")
+                await cancellation.raise_if_cancelled(STAGE_PARSE)
                 await self._update(
                     task_key, response_data, 15, TaskStatus.PROCESSING,
                     "Начинаю перевод...",
                 )
 
-                current_stage = "перевод документа"
+                current_stage = STAGE_TRANSLATE
                 translator = CustomModelTranslator(
                     source=Path(file_path),
                     source_language=source_language,
@@ -239,9 +247,9 @@ class TranslatorV2Service:
                     translator, docling_doc, task_key, response_data, cancellation
                 )
                 translated_path = outcome.file_path
-                await cancellation.raise_if_cancelled("перевод документа")
+                await cancellation.raise_if_cancelled(STAGE_TRANSLATE)
 
-                current_stage = "загрузка переведённого файла"
+                current_stage = STAGE_UPLOAD_TRANSLATED
                 await self._update(
                     task_key, response_data, 95, TaskStatus.PROCESSING,
                     "Загружаю переведённый файл...",
@@ -272,14 +280,14 @@ class TranslatorV2Service:
                     task_key, response_data, 100, TaskStatus.READY, final_text_status
                 )
                 logger.success(
-                    "TranslatorV2: задача успешно завершена task_id='{}'", task_id
+                    "TranslatorV2: task completed successfully task_id='{}'", task_id
                 )
                 final_status = TaskStatus.READY
 
         except TaskCancelled as exc:
             self.last_error = None
             logger.info(
-                "TranslatorV2: задача отменена task_id='{}' user_id='{}' stage='{}'",
+                "TranslatorV2: task cancelled task_id='{}' user_id='{}' stage='{}'",
                 task_id,
                 user_id,
                 exc.stage or current_stage,
@@ -296,7 +304,7 @@ class TranslatorV2Service:
             # Корутину гасят снаружи (SIGTERM, закрытие цикла): публиковать
             # статус уже некому и нечем, но временные файлы обязаны уйти.
             logger.warning(
-                "TranslatorV2: корутина задачи отменена извне task_id='{}' stage='{}'",
+                "TranslatorV2: task coroutine cancelled from outside task_id='{}' stage='{}'",
                 task_id,
                 current_stage,
             )
@@ -305,7 +313,7 @@ class TranslatorV2Service:
             self.last_error = exc
             self.last_stage = current_stage
             logger.error(
-                "TranslatorV2: задача превысила лимит времени "
+                "TranslatorV2: task exceeded its time limit "
                 "task_id='{}' user_id='{}' stage='{}' error='{}'",
                 task_id,
                 user_id,
@@ -325,7 +333,7 @@ class TranslatorV2Service:
             self.last_error = exc
             self.last_stage = current_stage
             logger.error(
-                "TranslatorV2: задача завершилась ошибкой task_id='{}' user_id='{}' stage='{}' error='{}'",
+                "TranslatorV2: task failed task_id='{}' user_id='{}' stage='{}' error='{}'",
                 task_id,
                 user_id,
                 current_stage,
@@ -347,7 +355,7 @@ class TranslatorV2Service:
                 await source.release()
             except Exception as exc:
                 logger.warning(
-                    "TranslatorV2: не удалось освободить источник файла "
+                    "TranslatorV2: failed to release the file source "
                     "task_id='{}': {}",
                     task_id,
                     exc,
@@ -370,7 +378,7 @@ class TranslatorV2Service:
         """
         response_data.text_status = text_status
         logger.info(
-            "TranslatorV2: обновление статуса key='{}' progress={} status='{}' text_status='{}'",
+            "TranslatorV2: status update key='{}' progress={} status='{}' text_status='{}'",
             key,
             progress,
             status,
@@ -387,7 +395,7 @@ class TranslatorV2Service:
             raise
         except Exception as exc:
             logger.warning(
-                "TranslatorV2: не удалось опубликовать промежуточный статус "
+                "TranslatorV2: failed to publish an intermediate status "
                 "key='{}' progress={}: {}",
                 key,
                 progress,
@@ -395,7 +403,7 @@ class TranslatorV2Service:
             )
             return
         self._last_progress = progress
-        logger.debug("TranslatorV2: статус обновлён key='{}'", key)
+        logger.debug("TranslatorV2: status updated key='{}'", key)
 
     async def _publish_terminal(
         self,
@@ -408,7 +416,7 @@ class TranslatorV2Service:
         """Терминальная публикация. Ретраи — внутри клиента webhook_manager."""
         response_data.text_status = text_status
         logger.info(
-            "TranslatorV2: терминальный статус key='{}' progress={} status='{}' text_status='{}'",
+            "TranslatorV2: terminal status key='{}' progress={} status='{}' text_status='{}'",
             key,
             progress,
             status,
@@ -421,7 +429,7 @@ class TranslatorV2Service:
             raise
         except Exception as exc:
             logger.error(
-                "TranslatorV2: не удалось опубликовать терминальный статус "
+                "TranslatorV2: failed to publish the terminal status "
                 "key='{}' status='{}': {}",
                 key,
                 status,
@@ -446,7 +454,7 @@ class TranslatorV2Service:
                 Path(path).unlink(missing_ok=True)
             except Exception as exc:
                 logger.warning(
-                    "TranslatorV2: не удалось удалить временный файл '{}': {}",
+                    "TranslatorV2: failed to delete the temporary file '{}': {}",
                     path,
                     exc,
                 )
@@ -480,7 +488,7 @@ class TranslatorV2Service:
                 translator.source_language = detected
                 response_data.original_language = detected
                 logger.info(
-                    "TranslatorV2: язык определён автоматически key='{}' language='{}'",
+                    "TranslatorV2: language detected automatically key='{}' language='{}'",
                     task_key,
                     detected,
                 )
@@ -522,7 +530,7 @@ class TranslatorV2Service:
             ) as exc:
                 failed[0] += 1
                 logger.warning(
-                    "TranslatorV2: элемент не переведён key='{}' error='{}'",
+                    "TranslatorV2: item left untranslated key='{}' error='{}'",
                     task_key,
                     exc,
                 )
@@ -536,7 +544,7 @@ class TranslatorV2Service:
                     if failed[0] > 0:
                         status_text = f"{status_text} (не переведено: {failed[0]})"
                     logger.debug(
-                        "TranslatorV2: прогресс перевода key='{}' progress={:.1f} translated={}/{}",
+                        "TranslatorV2: translation progress key='{}' progress={:.1f} translated={}/{}",
                         task_key,
                         progress,
                         n,
@@ -558,8 +566,8 @@ class TranslatorV2Service:
                             await _send()
                         except Exception as exc:
                             logger.warning(
-                                "TranslatorV2: не удалось обновить "
-                                "прогресс key='{}': {}",
+                                "TranslatorV2: failed to update "
+                                "progress key='{}': {}",
                                 task_key,
                                 exc,
                             )
@@ -596,7 +604,7 @@ class TranslatorV2Service:
         """Переводить без создания корутины на каждый элемент сразу."""
         batch_size = max(1, settings.TRANSLATOR_MAX_CONCURRENCY)
         for start in range(0, len(items), batch_size):
-            await cancellation.raise_if_cancelled("перевод документа")
+            await cancellation.raise_if_cancelled(STAGE_TRANSLATE)
             batch = items[start : start + batch_size]
             results = await asyncio.gather(
                 *(translate(get_text(item)) for item in batch)
