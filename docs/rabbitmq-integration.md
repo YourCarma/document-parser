@@ -185,7 +185,6 @@ file_path / error`. Правки:
     "file_path": "documents/report.pdf",
     "source_language": "auto",
     "target_language": "ru",
-    "bucket": null,
     "output_prefix": "translated",
     "parse_images": false,
     "include_image_in_output": false,
@@ -195,8 +194,10 @@ file_path / error`. Правки:
 ```
 
 - `file_path` — **object key внутри бакета** (без `/api/gateway`, подтверждено).
-- `bucket` — необязательное явное переопределение; при `null` берём персональный
-  Document-бакет через `resource_manager`.
+- Бакета в сообщении **нет намеренно**: он всегда ищется по `user_id` через
+  `resource_manager`. Позволить продюсеру назвать бакет — значит позволить ему
+  записать файл в чужое хранилище. Если такое поле всё же придёт, оно молча
+  игнорируется.
 - Языки прогоняем через тот же ISO-639-валидатор, что и `TranslatorRequest`
   (`modules/translator/v1/schemas.py:38`), включая поддержку `auto`.
 

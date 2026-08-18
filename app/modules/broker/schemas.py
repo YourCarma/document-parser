@@ -66,7 +66,6 @@ class TranslatePayload(BaseModel):
     file_path: str
     source_language: str = "auto"
     target_language: str = "ru"
-    bucket: str | None = None
     output_prefix: str | None = None
     parse_images: bool = False
     include_image_in_output: bool = False
@@ -97,7 +96,7 @@ class TranslatePayload(BaseModel):
             # HTTPException пролез бы наружу мимо ValidationError.
             raise ValueError(str(exc.detail)) from exc
 
-    @field_validator("bucket", "output_prefix", mode="after")
+    @field_validator("output_prefix", mode="after")
     @classmethod
     def _normalize_optional_path(cls, value: str | None) -> str | None:
         if value is None:

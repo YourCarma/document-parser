@@ -53,9 +53,9 @@ class TranslateHandler(TaskHandlerABC):
         if not is_supported_extension(payload.file_path):
             raise UnsupportedSourceFormat(payload.file_path)
 
-        bucket = payload.bucket or await resource_manager.get_user_bucket(
-            envelope.user_id
-        )
+        # Бакет только по user_id: класть его в сообщение значит позволить
+        # продюсеру записать что угодно в чужое хранилище.
+        bucket = await resource_manager.get_user_bucket(envelope.user_id)
         if not bucket:
             raise BucketNotFound(envelope.user_id)
 

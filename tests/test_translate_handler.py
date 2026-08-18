@@ -143,7 +143,9 @@ class TranslateHandlerTest(unittest.IsolatedAsyncioTestCase):
 
         self.runtime.watchtower_client.download_file.assert_not_awaited()
 
-    async def test_handler_uses_explicit_bucket_from_payload(self):
+    async def test_bucket_from_payload_is_ignored(self):
+        """Бакет берём только по user_id: продюсер не должен уметь писать
+        в чужое хранилище, назвав его в сообщении."""
         captured = {}
 
         async def run(self_service, **kwargs):
@@ -151,10 +153,10 @@ class TranslateHandlerTest(unittest.IsolatedAsyncioTestCase):
             return TaskStatus.READY
 
         with patch.object(TranslatorV2Service, "run_translation_task", run):
-            await self._handle(envelope(bucket="explicit-bucket"))
+            await self._handle(envelope(bucket="чужой-бакет"))
 
-        self.assertEqual(captured["bucket"], "explicit-bucket")
-        self.runtime.resource_manager_client.get_user_bucket.assert_not_awaited()
+        self.assertEqual(captured["bucket"], "bucket-1")
+        self.runtime.resource_manager_client.get_user_bucket.assert_awaited_once()
 
     async def test_handler_uses_output_prefix_from_payload(self):
         captured = {}

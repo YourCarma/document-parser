@@ -89,7 +89,6 @@ class TranslatePayloadTest(unittest.TestCase):
 
         self.assertEqual(payload.source_language, "auto")
         self.assertEqual(payload.target_language, "ru")
-        self.assertIsNone(payload.bucket)
         self.assertIsNone(payload.output_prefix)
         self.assertFalse(payload.parse_images)
         self.assertFalse(payload.include_image_in_output)
