@@ -36,7 +36,7 @@ PYTHONPATH=app python3 -m unittest discover -s tests -t tests
 с пересборкой пула, убийство группы `soffice` по таймауту, ретраи
 `webhook_manager`, расширенная деградация перевода, `download_file`, `aio-pika`.
 
-**Не закоммичено:** `app/modules/broker/*` (консюмер, диспетчер, схемы,
+**Закоммичено (`9ec319a`):** `app/modules/broker/*` (консюмер, диспетчер, схемы,
 классификация ошибок, хендлер перевода), `app/runtime.py`, `app/modules/messages.py`,
 `app/modules/translator/v2/sources.py`, правки `main.py`/`settings.py`/env-файлов,
 шесть новых файлов тестов.
