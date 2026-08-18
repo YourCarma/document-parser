@@ -36,6 +36,10 @@ class BrokerConsumerABC(ABC):
     async def health(self) -> bool:
         """True — потребление идёт и соединение живо."""
 
+    async def health_report(self) -> dict:
+        """Подробности для `/health`. Реализация по умолчанию — только флаг."""
+        return {"healthy": await self.health()}
+
 
 @dataclass(frozen=True, slots=True)
 class HandlerOutcome:

@@ -174,6 +174,8 @@ def build_config(**overrides) -> RabbitMQConfig:
         declare_topology=True,
         ack_deadline_secs=1800,
         shutdown_grace_secs=60,
+        # 0 — сторож DLQ в юнит-тестах не поднимается: он ходит в сеть.
+        dlq_check_interval_secs=0,
     )
     params.update(overrides)
     return RabbitMQConfig(**params)

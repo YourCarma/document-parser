@@ -1,5 +1,5 @@
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
@@ -131,10 +131,27 @@ async def get_root():
     """
 
 @app.get('/health', tags=['System'])
-async def health_check():
-    return {
-        'status': "Ok",
-    }
+async def health_check(request: Request, response: Response):
+    """Готовность сервиса, включая состояние консюмера.
+
+    Отдаём 503, если консюмер включён, но не потребляет: под, который молча
+    не разбирает очередь, для оркестратора должен выглядеть больным.
+    """
+    broker = getattr(request.app.state, "broker", None)
+    if broker is None:
+        return {"status": "Ok", "broker": "disabled"}
+
+    try:
+        report = await broker.health_report()
+    except Exception as exc:
+        logger.error("Health: не удалось опросить консюмер: {}", exc)
+        response.status_code = 503
+        return {"status": "Error", "broker": {"healthy": False, "error": str(exc)}}
+
+    if not report.get("healthy"):
+        response.status_code = 503
+        return {"status": "Error", "broker": report}
+    return {"status": "Ok", "broker": report}
 
 if __name__ == "__main__":
     uvicorn.run(

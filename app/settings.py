@@ -98,6 +98,10 @@ class Settings(BaseSettings):
     RMQ_ACK_DEADLINE_SECS: int = 3600
     RMQ_ACK_SAFETY_MARGIN_SECS: int = 120
     RMQ_SHUTDOWN_GRACE_SECS: int = 60
+    # Периодическая проверка DLQ. У рабочей очереди нет DLX, копии в DLQ кладёт
+    # сам сервис — значит непустая DLQ означает потерянные для пользователя
+    # задачи, и узнавать о ней надо не из тикета поддержки.
+    RMQ_DLQ_CHECK_INTERVAL_SECS: int = 60
 
     # Написание имени сервиса у гейтвея не подтверждено: по умолчанию берём
     # сегмент из task_type ("document-parser.translate" -> "document-parser").

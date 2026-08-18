@@ -26,6 +26,7 @@ class RabbitMQConfig:
     consumer_tag: str
     declare_topology: bool
     ack_deadline_secs: int
+    dlq_check_interval_secs: int
     shutdown_grace_secs: int
 
     @classmethod
@@ -48,6 +49,7 @@ class RabbitMQConfig:
             consumer_tag=settings.RMQ_CONSUMER_TAG,
             declare_topology=settings.RMQ_DECLARE_TOPOLOGY,
             ack_deadline_secs=settings.RMQ_ACK_DEADLINE_SECS,
+            dlq_check_interval_secs=max(0, settings.RMQ_DLQ_CHECK_INTERVAL_SECS),
             shutdown_grace_secs=settings.RMQ_SHUTDOWN_GRACE_SECS,
         )
 

@@ -12,6 +12,7 @@
 - Возвращать результат как `.md` или `.docx`.
 - Переводить документ синхронно через `translator v1`.
 - Запускать асинхронный перевод с прогрессом через `translator v2`.
+- Брать задачи перевода из очереди RabbitMQ (см. «Режим очереди»).
 
 Поддерживаемые форматы:
 
@@ -90,6 +91,80 @@ Parser factory consists of **5** parser types, which having own processing algor
 - `TRANSALTOR_MAX_CONCURRENCY` — ограничение параллельных запросов к переводчику.
 
 Пример запуска по умолчанию использует `.env.dev`. Для production-сценария можно задать `ENV_FILE=/path/to/.env.production`.
+
+## Режим очереди (RabbitMQ)
+
+Кроме HTTP сервис умеет брать задачи из очереди. Оба входа ведут в один и тот же
+конвейер перевода — различается только источник файла и то, кто создаёт задачу.
+
+Включается флагом, один и тот же образ работает в двух ролях:
+
+```dotenv
+BROKER_ENABLED=true      # в деплойменте воркера
+BROKER_ENABLED=false     # в деплойменте API
+```
+
+Формат сообщения:
+
+```json
+{
+  "task_id": "5fb0b68c-2259-47d8-8e72-3dc517ac6d4d",
+  "user_id": "1234",
+  "task_type": "document-parser.translate",
+  "payload": {
+    "file_path": "documents/report.pdf",
+    "source_language": "auto",
+    "target_language": "ru"
+  }
+}
+```
+
+`file_path` — object key внутри бакета пользователя; бакет берётся из
+`resource_manager`, файл скачивается из `watchtower`, результат кладётся туда же.
+Прогресс и итог публикуются в `webhook_manager` по ключу
+`{user_id}:{SERVICE_NAME}:{task_id}`, в очередь ответ не пишется.
+
+### Что важно знать про топологию
+
+- **Exchange и рабочую очередь сервис не создаёт** — их владелец `task_gateway`.
+  Если их нет, воркер осознанно падает на старте с явным сообщением.
+- Свои `document-parser.dlx`, `document-parser.dlq` и `document-parser.retry`
+  сервис объявляет сам.
+- У рабочей очереди нет DLX, поэтому копии сообщений в DLQ **публикует сам
+  сервис**. Отсюда следствие для эксплуатации: DLQ наполняется только работающим
+  подом, и её непустота — сигнал о невыполненных задачах. Сервис проверяет её
+  раз в `RMQ_DLQ_CHECK_INTERVAL_SECS` и пишет в лог, а `GET /health` отдаёт
+  глубину в поле `broker.dlq_depth`.
+
+### `consumer_timeout`
+
+Брокер по умолчанию разрывает канал, если сообщение не подтверждено за 30 минут,
+а перевод большого документа идёт дольше. На брокере должно стоять
+`consumer_timeout = 3600000` (60 минут), в сервисе — `TASK_TIMEOUT_SECS=3000`
+(50 минут) и `RMQ_ACK_DEADLINE_SECS=3600`. Готовый конфиг —
+`deploy/rabbitmq/rabbitmq.conf`.
+
+### Локальная разработка
+
+```bash
+docker compose -f docker-compose.dev.yaml up -d     # брокер с нужным consumer_timeout
+PYTHONPATH=app python3 -m unittest discover -s tests -t tests
+```
+
+Management UI — http://localhost:15672 (guest/guest). Команды для создания
+«гейтвейной» топологии вручную — в шапке `docker-compose.dev.yaml`.
+
+### Проверка состояния
+
+```bash
+curl -s localhost:1338/health | jq
+```
+
+`GET /health` отдаёт **503**, если консюмер включён, но не потребляет: под,
+который молча не разбирает очередь, для оркестратора должен выглядеть больным.
+
+Подробности архитектуры — `docs/rabbitmq-integration.md`, инварианты модуля —
+`app/modules/broker/AGENTS.md`.
 
 #### 1. Parsing documents
 

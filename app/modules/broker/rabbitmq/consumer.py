@@ -88,6 +88,9 @@ class RabbitMQConsumer(BrokerConsumerABC):
         self._dlq_ready: bool = False
         self._retry_queue_ready: bool = False
         self._callbacks_attached: bool = False
+        # Сторож DLQ и последнее известное число сообщений в ней (-1 — не знаем).
+        self._dlq_watch_task: asyncio.Task | None = None
+        self._dlq_depth: int = -1
 
     # --- жизненный цикл -------------------------------------------------
 
@@ -319,10 +322,12 @@ class RabbitMQConsumer(BrokerConsumerABC):
             self._config.queue,
             self._consumer_tag,
         )
+        self._start_dlq_watch()
 
     async def stop(self) -> None:
         try:
             self._stopping = True
+            await self._stop_dlq_watch()
             # Разбудить задачи, стоящие в паузе перед возвратом сообщения:
             # ждать её до конца grace-периода бессмысленно.
             self._stop_event.set()
@@ -363,6 +368,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
             self._queue = None
             self._consumer_tag = None
             self._started = False
+            self._dlq_watch_task = None
 
     async def health(self) -> bool:
         return (
@@ -372,6 +378,102 @@ class RabbitMQConsumer(BrokerConsumerABC):
             and self._channel is not None
             and not self._channel.is_closed
         )
+
+    async def health_report(self) -> dict:
+        """Подробное состояние для `/health`."""
+        return {
+            "healthy": await self.health(),
+            "consuming": self._started,
+            "connected": self._connection is not None
+            and not self._connection.is_closed,
+            "queue": self._config.queue,
+            "dlq": self._config.dlq,
+            "dlq_ready": self._dlq_ready,
+            "retry_queue_ready": self._retry_queue_ready,
+            # -1 — сторож ещё не отработал или не смог опросить DLQ.
+            "dlq_depth": self._dlq_depth,
+        }
+
+    async def dlq_depth(self) -> int:
+        """Число сообщений в DLQ. -1 — узнать не удалось.
+
+        Канал берём каждый раз новый: aio-pika кэширует `declaration_result`
+        объявленной очереди, и повторный passive-declare на том же канале
+        вернёт счётчик на момент первого объявления, а не текущий.
+        """
+        if not self._config.dlq:
+            return -1
+        if self._connection is None or self._connection.is_closed:
+            return -1
+
+        channel = None
+        try:
+            channel = await self._connection.channel()
+            queue = await channel.declare_queue(self._config.dlq, passive=True)
+            return int(queue.declaration_result.message_count or 0)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "Broker: не удалось опросить DLQ '{}': {}", self._config.dlq, exc
+            )
+            return -1
+        finally:
+            if channel is not None and not channel.is_closed:
+                try:
+                    await channel.close()
+                except Exception:
+                    pass
+
+    def _start_dlq_watch(self) -> None:
+        interval = self._config.dlq_check_interval_secs
+        if interval <= 0 or self._dlq_watch_task is not None:
+            return
+        self._dlq_watch_task = asyncio.create_task(self._dlq_watch_loop(interval))
+
+    async def _stop_dlq_watch(self) -> None:
+        task = self._dlq_watch_task
+        if task is None:
+            return
+        self._dlq_watch_task = None
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):
+            pass
+
+    async def _dlq_watch_loop(self, interval: int) -> None:
+        """Периодически смотреть в DLQ и кричать, если она непустая.
+
+        Дежурному это единственный сигнал: у рабочей очереди нет DLX, копии в
+        DLQ кладёт сам сервис, и каждое сообщение там — задача, о провале
+        которой пользователь уже знает, а мы ещё нет.
+        """
+        previous = -1
+        while not self._stopping:
+            try:
+                await asyncio.wait_for(self._stop_event.wait(), timeout=interval)
+                return
+            except (asyncio.TimeoutError, TimeoutError):
+                pass
+            except asyncio.CancelledError:
+                raise
+
+            depth = await self.dlq_depth()
+            self._dlq_depth = depth
+            if depth > 0:
+                # Порог по изменению, а не по факту: иначе непустая DLQ будет
+                # писать одно и то же в лог каждую минуту до ручного разбора.
+                level = "critical" if depth != previous else "warning"
+                getattr(logger, level)(
+                    "Broker: в DLQ '{}' лежит {} сообщений — задачи не выполнены "
+                    "и требуют ручного разбора",
+                    self._config.dlq,
+                    depth,
+                )
+            elif depth == 0 and previous > 0:
+                logger.success("Broker: DLQ '{}' разобрана", self._config.dlq)
+            previous = depth
 
     # --- обработка сообщений --------------------------------------------
 
