@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     TASK_CANCEL_CHECK_TTL_SECS: float = 5.0
     PARSE_TIMEOUT_SECS: int = 900
     SOFFICE_TIMEOUT_SECS: int = 180
-    TASK_TIMEOUT_SECS: int = 1500        # заведомо ниже consumer_timeout брокера
+    TASK_TIMEOUT_SECS: int = 3000        # заведомо ниже consumer_timeout брокера
 
     # --- Скачивание исходников ---
     MAX_DOWNLOAD_FILE_SIZE_MB: int = 200
@@ -92,9 +92,10 @@ class Settings(BaseSettings):
     # exchange и очереди этот флаг не касается — их не объявляем никогда.
     # false имеет смысл только там, где у пользователя нет прав на configure.
     RMQ_DECLARE_TOPOLOGY: bool = True
-    # Предполагаемый consumer_timeout брокера. Фактическое значение не
-    # подтверждено — используется только для валидации и логов, не для логики.
-    RMQ_ACK_DEADLINE_SECS: int = 1800
+    # consumer_timeout брокера. Задан явно в rabbitmq.conf нашего RMQ
+    # (consumer_timeout = 3600000). Используется только для валидации и логов,
+    # не для логики: если значение на брокере изменят, поправить и здесь.
+    RMQ_ACK_DEADLINE_SECS: int = 3600
     RMQ_ACK_SAFETY_MARGIN_SECS: int = 120
     RMQ_SHUTDOWN_GRACE_SECS: int = 60
 
