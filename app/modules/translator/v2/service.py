@@ -1,6 +1,7 @@
 import asyncio
 import shutil
 import tempfile
+from contextlib import suppress
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -18,6 +19,7 @@ from modules.messages import (
     MSG_TIMEOUT,
     MSG_UNSUPPORTED_FORMAT,
 )
+from modules.metrics import StageTracker, instruments
 from modules.parser.v1.exceptions import ContentNotSupportedError, ConversionTimeoutError
 from modules.parser.v1.schemas import ParserMods, ParserParams
 from modules.parser.v1.utils import delete_file, parse_document, run_in_process
@@ -62,6 +64,13 @@ _TRANSLATION_TIMEOUT_FALLBACK_SUFFIX = " (ошибка запроса, пере�
 _UNTRANSLATED_TEXT_STATUS = "Готово. Не переведено элементов: {count}"
 _CANCELLED_TEXT_STATUS = "Задача отменена"
 _TIMEOUT_TEXT_STATUS = "Превышено время обработки"
+# Нижняя граница шага опроса отмены на длинных операциях без своих
+# контрольных точек (парсинг): чаще смысла нет, ответ всё равно кэширован.
+_MIN_CANCEL_POLL_SECS = 1.0
+# Готовые словари атрибутов: элементов в документе тысячи, собирать словарь
+# на каждом незачем.
+_ITEM_TRANSLATED = {"result": "translated"}
+_ITEM_UNTRANSLATED = {"result": "untranslated"}
 
 
 def _stage_to_user_message(stage: str) -> str:
@@ -112,6 +121,9 @@ class TranslatorV2Service:
         # чтобы решить судьбу сообщения.
         self.last_error: BaseException | None = None
         self.last_stage: str = ""
+        # Токен текущей задачи: нужен публикаторам статуса, чтобы не писать
+        # PROCESSING поверх уже выставленного пользователем CANCELLED.
+        self._cancellation: CancellationTokenABC = NullCancellationToken()
 
     async def run_translation_task(
         self,
@@ -140,8 +152,15 @@ class TranslatorV2Service:
         `output_prefix` — префикс только для переведённого файла.
         """
         cancellation = cancellation or NullCancellationToken(task_key)
+        self._cancellation = cancellation
+        # Источник различает сценарии: локальный файл приходит из HTTP,
+        # готовый провайдер — из очереди. В метриках это разные режимы работы.
+        stages = StageTracker(source="http" if source is None else "broker")
         source = source or LocalUploadSource(file_path, original_filename)
         final_status = TaskStatus.ERROR
+        # Исход для метрик: у TaskStatus нет отдельных значений для таймаута и
+        # внешней отмены, а на графике их надо различать.
+        metrics_outcome = "error"
         translated_path: str | None = None
         response_data = TranslatorResponseData(
             original_language=source_language,
@@ -149,12 +168,12 @@ class TranslatorV2Service:
             text_status="Получение ресурсов пользователя...",
         )
 
-        current_stage = STAGE_INIT
+        current_stage = stages.enter(STAGE_INIT)
         try:
             async with asyncio.timeout(settings.TASK_TIMEOUT_SECS):
                 await cancellation.raise_if_cancelled("до старта")
 
-                current_stage = STAGE_RESOLVE_BUCKET
+                current_stage = stages.enter(STAGE_RESOLVE_BUCKET)
                 bucket = bucket or await self.resource_manager.get_user_bucket(user_id)
                 if not bucket:
                     raise BucketNotFound(user_id)
@@ -168,19 +187,23 @@ class TranslatorV2Service:
                 )
                 await cancellation.raise_if_cancelled(STAGE_RESOLVE_BUCKET)
 
-                current_stage = STAGE_FETCH_SOURCE
+                current_stage = stages.enter(STAGE_FETCH_SOURCE)
                 await self._update(
                     task_key, response_data, 5, TaskStatus.PROCESSING,
                     "Готовлю исходный файл...",
                 )
-                source_file = await source.acquire(bucket)
+                # Скачивание из бакета тоже без своих контрольных точек:
+                # большой файл едет минутами.
+                source_file = await self._await_or_cancel(
+                    source.acquire(bucket), cancellation, STAGE_FETCH_SOURCE
+                )
                 file_path = source_file.local_path
                 original_filename = source_file.original_filename
                 # Локальный путь известен только здесь: из очереди файл
                 # появляется на диске лишь после acquire().
                 parser_params.file_path = Path(file_path)
 
-                current_stage = STAGE_UPLOAD_ORIGINAL
+                current_stage = stages.enter(STAGE_UPLOAD_ORIGINAL)
                 if source_file.remote_key is None:
                     object_key = await self.watchtower.upload_file(
                         bucket,
@@ -200,7 +223,7 @@ class TranslatorV2Service:
                 )
                 await cancellation.raise_if_cancelled(STAGE_UPLOAD_ORIGINAL)
 
-                current_stage = STAGE_PARSE
+                current_stage = stages.enter(STAGE_PARSE)
                 logger.debug(
                     "TranslatorV2: stage='{}' task_id='{}' filename='{}'",
                     current_stage,
@@ -209,12 +232,16 @@ class TranslatorV2Service:
                 )
                 try:
                     async with asyncio.timeout(settings.PARSE_TIMEOUT_SECS):
-                        docling_doc: DoclingDocument = await run_in_process(
-                            parse_document,
-                            executor,
-                            parser_params,
-                            ParserMods.TO_DOCLING,
-                            semaphore=self.parser_semaphore,
+                        docling_doc: DoclingDocument = await self._await_or_cancel(
+                            run_in_process(
+                                parse_document,
+                                executor,
+                                parser_params,
+                                ParserMods.TO_DOCLING,
+                                semaphore=self.parser_semaphore,
+                            ),
+                            cancellation,
+                            STAGE_PARSE,
                         )
                 except TimeoutError as exc:
                     # Отменяется только ожидание: воркер парсинга останется
@@ -234,7 +261,7 @@ class TranslatorV2Service:
                     "Начинаю перевод...",
                 )
 
-                current_stage = STAGE_TRANSLATE
+                current_stage = stages.enter(STAGE_TRANSLATE)
                 translator = CustomModelTranslator(
                     source=Path(file_path),
                     source_language=source_language,
@@ -250,7 +277,7 @@ class TranslatorV2Service:
                 translated_path = outcome.file_path
                 await cancellation.raise_if_cancelled(STAGE_TRANSLATE)
 
-                current_stage = STAGE_UPLOAD_TRANSLATED
+                current_stage = stages.enter(STAGE_UPLOAD_TRANSLATED)
                 await self._update(
                     task_key, response_data, 95, TaskStatus.PROCESSING,
                     "Загружаю переведённый файл...",
@@ -281,6 +308,7 @@ class TranslatorV2Service:
                     "TranslatorV2: task completed successfully task_id='{}'", task_id
                 )
                 final_status = TaskStatus.READY
+                metrics_outcome = "ready"
 
         except TaskCancelled as exc:
             self.last_error = None
@@ -298,6 +326,7 @@ class TranslatorV2Service:
                 _CANCELLED_TEXT_STATUS,
             )
             final_status = TaskStatus.CANCELLED
+            metrics_outcome = "cancelled"
         except asyncio.CancelledError:
             # Корутину гасят снаружи (SIGTERM, закрытие цикла): публиковать
             # статус уже некому и нечем, но временные файлы обязаны уйти.
@@ -306,6 +335,7 @@ class TranslatorV2Service:
                 task_id,
                 current_stage,
             )
+            metrics_outcome = "interrupted"
             raise
         except (TimeoutError, TaskTimeout) as exc:
             self.last_error = exc
@@ -327,6 +357,7 @@ class TranslatorV2Service:
                 _TIMEOUT_TEXT_STATUS,
             )
             final_status = TaskStatus.ERROR
+            metrics_outcome = "timeout"
         except Exception as exc:
             self.last_error = exc
             self.last_stage = current_stage
@@ -348,6 +379,7 @@ class TranslatorV2Service:
             )
             final_status = TaskStatus.ERROR
         finally:
+            stages.finish(metrics_outcome, current_stage, self.last_error)
             await self._cleanup_files(file_path, translated_path)
             try:
                 await source.release()
@@ -374,6 +406,11 @@ class TranslatorV2Service:
         Best-effort (P0-2): сбой webhook_manager не должен ронять задачу,
         которая по существу выполнена.
         """
+        # webhook_manager хранит отмену в том же поле status, что и прогресс:
+        # наш PROCESSING поверх CANCELLED стёр бы отмену навсегда — задача
+        # доработала бы до конца, сколько её ни отменяй.
+        if status is TaskStatus.PROCESSING:
+            await self._cancellation.raise_if_cancelled(fresh=True)
         response_data.text_status = text_status
         logger.info(
             "TranslatorV2: status update key='{}' progress={} status='{}' text_status='{}'",
@@ -514,8 +551,13 @@ class TranslatorV2Service:
         progress_lock = asyncio.Lock()
 
         async def translate_tracked(text: str) -> str:
+            # На каждом элементе, а не только на границе батча: батч из
+            # TRANSLATOR_MAX_CONCURRENCY элементов с ретраями живёт долго.
+            await cancellation.raise_if_cancelled(STAGE_TRANSLATE)
             try:
-                return await translator.translate_element_limited(text)
+                translated = await translator.translate_element_limited(text)
+                instruments().translate_items.add(1, _ITEM_TRANSLATED)
+                return translated
             except TaskCancelled:
                 # Отмена задачи — не деградация одного элемента.
                 raise
@@ -527,6 +569,7 @@ class TranslatorV2Service:
                 aiohttp.ClientError,
             ) as exc:
                 failed[0] += 1
+                instruments().translate_items.add(1, _ITEM_UNTRANSLATED)
                 logger.warning(
                     "TranslatorV2: item left untranslated key='{}' error='{}'",
                     task_key,
@@ -551,6 +594,12 @@ class TranslatorV2Service:
                     snapshot = {**response_data.model_dump(), "text_status": status_text}
 
                     async def _send(p=progress, s=snapshot):
+                        # Тот же запрет, что и в _update: PROCESSING поверх
+                        # CANCELLED убил бы отмену. Шкалу при этом двигаем:
+                        # её отдаст терминальная публикация CANCELLED.
+                        if await cancellation.is_cancelled(fresh=True):
+                            self._last_progress = p
+                            return
                         await self.webhook.update_progress(
                             task_key, p, TaskStatus.PROCESSING, attempts=1
                         )
@@ -604,11 +653,48 @@ class TranslatorV2Service:
         for start in range(0, len(items), batch_size):
             await cancellation.raise_if_cancelled(STAGE_TRANSLATE)
             batch = items[start : start + batch_size]
+            # return_exceptions: бросить прямо из-под gather нельзя — соседние
+            # корутины батча остались бы висеть и дописывать PROCESSING уже
+            # после публикации CANCELLED, снова стирая отмену.
             results = await asyncio.gather(
-                *(translate(get_text(item)) for item in batch)
+                *(translate(get_text(item)) for item in batch),
+                return_exceptions=True,
             )
+            failure = next(
+                (r for r in results if isinstance(r, BaseException)), None
+            )
+            if failure is not None:
+                raise failure
             for item, translated in zip(batch, results):
                 set_text(item, translated)
+
+    @staticmethod
+    async def _await_or_cancel(
+        awaitable,
+        cancellation: CancellationTokenABC,
+        stage: str,
+    ):
+        """Ждать длинную операцию, параллельно опрашивая отмену.
+
+        Внутрь операции не заглядываем: парсинг идёт в отдельном процессе и
+        прервать его нельзя — бросаем только ожидание, воркер дорабатывает сам
+        (та же семантика, что у PARSE_TIMEOUT_SECS).
+        """
+        task = asyncio.ensure_future(awaitable)
+        poll_secs = max(_MIN_CANCEL_POLL_SECS, settings.TASK_CANCEL_CHECK_TTL_SECS)
+        try:
+            while True:
+                done, _ = await asyncio.wait({task}, timeout=poll_secs)
+                if done:
+                    return task.result()
+                if await cancellation.is_cancelled():
+                    raise TaskCancelled(cancellation.task_key, stage)
+        except BaseException:
+            if not task.done():
+                task.cancel()
+                with suppress(BaseException):
+                    await task
+            raise
 
     @staticmethod
     async def _export_to_word(

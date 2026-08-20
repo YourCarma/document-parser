@@ -7,6 +7,8 @@ document-parser:
     tty: true
     ports:
       - '8012:8012'
+      # Метрики для скрейпа. При OTLP-пуше в коллектор наружу не нужен.
+      - '9464:9464'
     env_file:
       - './.env.production'
     environment:

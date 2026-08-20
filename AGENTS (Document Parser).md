@@ -46,6 +46,12 @@ app/
     resource_manager/         клиент поиска персонального бакета пользователя
     webhook_manager/          клиент задач: create_task, update_progress, update_response_data, get_task
                               + cancellation.py (токены отмены задачи)
+    metrics/                  наблюдаемость: OpenTelemetry, метрики, трейсы
+                              otel.py (инициализация), instruments.py (все метрики),
+                              stages.py (тайминги этапов), http.py (свой API и зависимости),
+                              concurrency.py (семафор с учётом загрузки), registry.py
+metrics/                      конфигурация наблюдаемости: коллектор, Prometheus, Tempo,
+                              дашборд Grafana, правила алертов (см. metrics/README.md)
 tests/                        unittest, без pytest
 ml/                           локальные модели Docling (в git не хранится, монтируется в docker)
 docs/                         drawio-схемы контекста
@@ -109,9 +115,11 @@ POST /api/v1/parser/parse/{text|file|file/word}
   Docling CPU-bound, поэтому процессы, а не потоки. При `BrokenProcessPool`
   `run_in_process` пересобирает пул и делает одну повторную попытку
   (`retries=1`); голый `Executor` тоже принимается, но не пересобирается.
-- `parser_semaphore` — `Semaphore(PARSER_WORKERS)`, ограничивает очередь к пулу.
-- `translation_semaphore` — `Semaphore(TRANSLATOR_MAX_CONCURRENCY)`, **общий на всё
+- `parser_semaphore` — `TrackedSemaphore(PARSER_WORKERS)`, ограничивает очередь к пулу.
+- `translation_semaphore` — `TrackedSemaphore(TRANSLATOR_MAX_CONCURRENCY)`, **общий на всё
   приложение** лимит одновременных запросов к сервису перевода.
+- `TrackedSemaphore` — обычный `asyncio.Semaphore`, который дополнительно
+  считает занятые слоты и ожидающих; отсюда берутся метрики загрузки.
 - `http_session` — один `aiohttp.ClientSession` (`total=None`, но `connect`/`sock_read`
   из настроек, `TCPConnector(limit=EXTERNAL_HTTP_CONNECTION_LIMIT)`).
 
@@ -163,6 +171,10 @@ POST /api/v1/parser/parse/{text|file|file/word}
   `TASK_CANCEL_CHECK_TTL_SECS` (кэш отрицательного ответа об отмене).
 - `MAX_DOWNLOAD_FILE_SIZE_MB` — лимит для `WatchtowerService.download_file`;
   property `MAX_DOWNLOAD_FILE_SIZE_BYTES` отдаёт его в байтах.
+- Наблюдаемость: `OTEL_ENABLED` (главный выключатель),
+  `OTEL_EXPORTER_OTLP_ENDPOINT` (база OTLP/HTTP, без пути),
+  `METRICS_HTTP_PORT` (Prometheus-эндпоинт на отдельном порту).
+  Push и pull независимы, подробности — в `metrics/README.md`.
 
 ## 8. Запуск
 
@@ -184,7 +196,37 @@ PYTHONPATH=app poetry run python -m unittest discover -s tests -t tests
 Импорты в коде абсолютные от каталога `app` (`from modules...`, `from settings import settings`),
 поэтому `PYTHONPATH=app` обязателен и при запуске, и при тестах.
 
-## 9. Инварианты и подводные камни
+## 9. Наблюдаемость
+
+Код — в `app/modules/metrics/`, конфигурация стенда и дашборд — в `metrics/`
+(там же таблица всех метрик). Главное для правок:
+
+- Модуль **необязательный**. Пакеты `opentelemetry-*` могут отсутствовать, а
+  `OTEL_ENABLED` по умолчанию `false` — тогда все инструменты становятся
+  заглушками. Ни один вызов метрик не имеет права ронять обработку задачи.
+- `setup_observability(app)` вызывается в `main.py` **на уровне модуля**, до
+  старта приложения: авто-инструментация FastAPI добавляет мидлварь, а после
+  старта стек мидлварей уже собран.
+- Новые метрики заводятся только в `instruments.py`. Единица измерения — в
+  имени (`_seconds`), поле `unit` пустое: иначе Prometheus-ридер и коллектор
+  допишут суффикс каждый по-своему и запросы дашборда разъедутся.
+- У каждой гистограммы обязаны быть свои границы в `HISTOGRAM_BUCKETS` —
+  дефолтные заканчиваются на 10, а здесь всё измеряется тысячами секунд. Это
+  проверяется тестом.
+- В атрибуты нельзя класть `task_id`, `user_id`, имена файлов и сырые пути:
+  каждое значение — отдельный временной ряд. Маршруты HTTP пишутся шаблоном
+  роутера, незнакомые пути схлопываются в `unmatched`.
+- Метрики исходящих вызовов снимает один `TraceConfig` на общей сессии из
+  `AppRuntime`. Клиент, создавший свою сессию (fallback), в метрики не попадёт.
+- Этапы перевода считает `StageTracker`: `enter()` на каждом переходе в
+  `run_translation_task`, ровно один `finish()` в `finally`.
+- `setup_observability(app)` инструментирует **каждый переданный `app`**, хотя
+  провайдеры поднимает один раз на процесс. Так надо: `python main.py`
+  импортирует модуль дважды — сначала как `__main__`, потом uvicorn по строке
+  `"main:app"`, — и запросы обслуживает второй объект приложения. Общий флаг
+  «уже настроено» оставил бы его без трейсов при работающих метриках.
+
+## 10. Инварианты и подводные камни
 
 - **Расширение важнее MIME.** Парсер выбирается по суффиксу временного файла,
   а суффикс берётся из имени, присланного клиентом. Меняя валидацию, не сломайте
@@ -223,12 +265,29 @@ PYTHONPATH=app poetry run python -m unittest discover -s tests -t tests
   отменяется только ожидание: слот `parser_semaphore` освобождается раньше, чем
   реально завершится процесс. Это принято осознанно, в логе остаётся
   `logger.error` с `task_id`.
+- **Отмену нельзя затирать своими же апдейтами.** webhook_manager хранит отмену
+  в том же поле `progress.status`, что и прогресс: `PATCH update_progress` со
+  статусом `PROCESSING`, отправленный после нажатия «Отменить», стирает
+  `CANCELLED` навсегда — задача доработает до конца, сколько её ни отменяй.
+  Поэтому все промежуточные публикации (`_update`, прогресс перевода) сперва
+  делают свежую проверку отмены (`is_cancelled(fresh=True)`, мимо TTL-кэша) и
+  либо бросают `TaskCancelled`, либо молча пропускают запись. Терминальные
+  публикации (`_publish_terminal`) этой проверки не делают. Окно гонки шириной
+  в один запрос остаётся — закрыть его полностью можно только на стороне
+  webhook_manager, запретив уход из `CANCELLED`.
+- **Отмена проверяется на каждом элементе перевода**, а не только на границе
+  батча: батч из `TRANSLATOR_MAX_CONCURRENCY` элементов с ретраями живёт долго.
+  Батч при этом дожидается уже запущенных корутин (`gather(return_exceptions=True)`)
+  — брошенные корутины дописали бы `PROCESSING` уже после публикации `CANCELLED`.
+  Парсинг своих контрольных точек не имеет, поэтому `_await_or_cancel` опрашивает
+  отмену параллельно ожиданию (шаг — `TASK_CANCEL_CHECK_TTL_SECS`, но не чаще
+  `_MIN_CANCEL_POLL_SECS`).
 - **Задачи V2 живут в `BackgroundTasks`** — не переживают рестарт процесса и не
   ограничены по количеству; общий лимит времени задаёт `TASK_TIMEOUT_SECS`.
 - **Аутентификации нет.** `X-User-ID` принимается на веру, сервис рассчитан на
   работу за шлюзом.
 
-## 10. Тесты
+## 11. Тесты
 
 | Файл | Что покрывает |
 | --- | --- |

@@ -67,5 +67,7 @@ RUN useradd -m appuser && \
 USER appuser
 
 EXPOSE 8012
+# Prometheus-эндпоинт наблюдаемости (METRICS_HTTP_PORT).
+EXPOSE 9464
 WORKDIR /document-parser/app
 ENTRYPOINT ["python", "main.py"]

@@ -172,6 +172,29 @@ curl -s localhost:1338/health | jq
 Подробности архитектуры — `docs/rabbitmq-integration.md`, инварианты модуля —
 `app/modules/broker/AGENTS.md`.
 
+## Мониторинг (OTLP + Grafana)
+
+Сервис отдаёт метрики и трейсы по OpenTelemetry: push по OTLP/HTTP в коллектор
+и, параллельно, Prometheus-эндпоинт на отдельном порту.
+
+```bash
+docker compose -f metrics/docker-compose.observability.yaml up -d
+OTEL_ENABLED=true PYTHONPATH=app python3 app/main.py
+```
+
+Дашборд «Document Parser» — <http://localhost:3000> (очередь, этапы перевода,
+внешние сервисы, загрузка семафоров), сырые метрики — <http://localhost:9464/metrics>.
+
+Подключение к коллектору контура — одна переменная:
+
+```env
+OTEL_ENABLED=true
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.observability:4318
+```
+
+Полное описание метрик, алертов и вариантов подключения — в
+[`metrics/README.md`](metrics/README.md).
+
 #### 1. Parsing documents
 
 ```rust

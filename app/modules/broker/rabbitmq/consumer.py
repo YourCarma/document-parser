@@ -19,6 +19,7 @@ from modules.broker.rabbitmq.config import RabbitMQConfig
 from modules.broker.reporting import report_task_error, report_task_retry
 from modules.broker.schemas import TaskType, parse_envelope, payload_user_id_differs
 from modules.messages import MSG_UPSTREAM_UNAVAILABLE
+from modules.metrics import instruments
 
 if TYPE_CHECKING:  # pragma: no cover
     from runtime import AppRuntime
@@ -165,6 +166,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
             "Broker: task key format '{{user_id}}:{}:{{task_id}}'",
             service_segment_for(TaskType.TRANSLATE.value),
         )
+        self._record_state()
 
     async def _reopen_channel(self):
         """Пересоздать основной канал.
@@ -324,6 +326,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
             self._config.queue,
             self._consumer_tag,
         )
+        self._record_state()
         self._start_dlq_watch()
 
     async def stop(self) -> None:
@@ -372,6 +375,45 @@ class RabbitMQConsumer(BrokerConsumerABC):
             self._started = False
             self._dlq_watch_task = None
             self._stats_channel = None
+            self._record_state()
+
+    def _record_state(self) -> None:
+        """Отразить состояние консюмера в метриках.
+
+        То же, что отдаёт `/health`, только не по запросу: молчащий консюмер
+        должен быть виден на графике, а не при обходе подов руками.
+        """
+        metrics = instruments()
+        connected = self._connection is not None and not self._connection.is_closed
+        queue = {"queue": self._config.queue}
+        metrics.broker_consuming.set(1 if self._started else 0, queue)
+        metrics.broker_connected.set(1 if connected else 0, queue)
+        metrics.broker_topology_ready.set(
+            1 if self._dlq_ready else 0, {"object": "dlq"}
+        )
+        metrics.broker_topology_ready.set(
+            1 if self._retry_queue_ready else 0, {"object": "retry"}
+        )
+
+    def _record_message(
+        self,
+        outcome: str,
+        task_type: str,
+        started: float,
+        error: BaseException | None = None,
+    ) -> None:
+        """Итог обработки одного сообщения: счётчик и длительность."""
+        attributes = {"outcome": outcome, "task_type": task_type}
+        instruments().broker_messages.add(
+            1,
+            {
+                **attributes,
+                "error_type": type(error).__name__ if error is not None else "none",
+            },
+        )
+        instruments().broker_processing_seconds.record(
+            time.monotonic() - started, attributes
+        )
 
     async def health(self) -> bool:
         return (
@@ -394,6 +436,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
         публикует, сообщение переиграется одной копией.
         """
         logger.warning("Broker: connection to the broker closed")
+        self._record_state()
         if self._stopping:
             # Штатная остановка: задачи гасит stop() со своим grace-периодом.
             return
@@ -522,6 +565,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
 
             depth = await self.dlq_depth()
             self._dlq_depth = depth
+            instruments().broker_dlq_depth.set(depth, {"queue": self._config.dlq})
             if depth > 0:
                 # Порог по изменению, а не по факту: иначе непустая DLQ будет
                 # писать одно и то же в лог каждую минуту до ручного разбора.
@@ -547,9 +591,18 @@ class RabbitMQConsumer(BrokerConsumerABC):
         """
         if self._stopping:
             await self._safe_nack(message, requeue=True)
+            instruments().broker_messages.add(
+                1,
+                {
+                    "outcome": "requeued",
+                    "task_type": "unknown",
+                    "error_type": "shutdown",
+                },
+            )
             return
         task = asyncio.create_task(self._process_message(message))
         self._tasks.add(task)
+        instruments().broker_inflight.add(1)
         task.add_done_callback(self._on_task_done)
 
     def _on_task_done(self, task: asyncio.Task) -> None:
@@ -559,6 +612,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
         never retrieved», а сообщение осталось бы без ack и без nack.
         """
         self._tasks.discard(task)
+        instruments().broker_inflight.add(-1)
         if task.cancelled():
             return
         exc = task.exception()
@@ -575,9 +629,13 @@ class RabbitMQConsumer(BrokerConsumerABC):
         started = time.monotonic()
         attempt = read_attempt(message.headers)
         task_key = ""
+        # До разбора конверта тип задачи неизвестен, а метрику писать всё
+        # равно надо: битые сообщения — тоже нагрузка.
+        task_type = "unknown"
         try:
             envelope = parse_envelope(message.body)
             task_key = build_task_key(envelope)
+            task_type = str(envelope.task_type)
             if payload_user_id_differs(envelope):
                 logger.warning(
                     "Broker: payload.user_id differs from the envelope key='{}'",
@@ -601,14 +659,17 @@ class RabbitMQConsumer(BrokerConsumerABC):
             logger.warning(
                 "Broker: processing interrupted by service shutdown key='{}'", task_key
             )
+            self._record_message("interrupted", task_type, started)
             raise
         except Exception as exc:
-            await self._finalize_failure(message, task_key, attempt, exc)
+            outcome = await self._finalize_failure(message, task_key, attempt, exc)
+            self._record_message(outcome, task_type, started, exc)
             return
 
         elapsed = time.monotonic() - started
         # ack только после терминального статуса, который опубликовал конвейер.
         await self._safe_ack(message)
+        self._record_message("processed", task_type, started)
         logger.success(
             "Broker: task finished key='{}' status='{}' elapsed={:.1f}s",
             task_key,
@@ -629,7 +690,8 @@ class RabbitMQConsumer(BrokerConsumerABC):
         task_key: str,
         attempt: int,
         exc: BaseException,
-    ) -> None:
+    ) -> str:
+        """Решить судьбу сообщения и вернуть исход для метрик."""
         decision = classify_error(exc)
         next_attempt = attempt + 1
         webhook = self._runtime.webhook_manager()
@@ -644,7 +706,7 @@ class RabbitMQConsumer(BrokerConsumerABC):
                 exc,
             )
             await self._safe_ack(message)
-            return
+            return "acked"
 
         # 2. Временный сбой, попытки остались -> retry-очередь.
         if (
@@ -662,8 +724,9 @@ class RabbitMQConsumer(BrokerConsumerABC):
                 await report_task_retry(
                     webhook, task_key, next_attempt, self._config.max_retries
                 )
-            await self._schedule_retry(message, next_attempt)
-            return
+            scheduled = await self._schedule_retry(message, next_attempt)
+            self._record_state()
+            return "retried" if scheduled else "requeued"
 
         # 3. Постоянная ошибка либо исчерпанные попытки -> DLQ.
         if decision.action is MessageAction.RETRY:
@@ -699,7 +762,8 @@ class RabbitMQConsumer(BrokerConsumerABC):
         # подтверждаем оригинал: обратный порядок теряет сообщение.
         if await self._publish_to_dlq(message, task_key, next_attempt, exc):
             await self._safe_ack(message)
-            return
+            self._record_state()
+            return "dlq"
 
         logger.critical(
             "Broker: failed to park the message in the DLQ key='{}' — leaving it "
@@ -708,6 +772,8 @@ class RabbitMQConsumer(BrokerConsumerABC):
         )
         await self._delay_before_requeue()
         await self._safe_nack(message, requeue=True)
+        self._record_state()
+        return "requeued"
 
     async def _publish_to_dlq(
         self,

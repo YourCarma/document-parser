@@ -108,6 +108,28 @@ class Settings(BaseSettings):
     # Куда кладём результат перевода из очереди. {task_id} подставляется.
     TRANSLATE_OUTPUT_PREFIX: str = "translated/{task_id}"
 
+    # --- Наблюдаемость ---
+    # Выключено по умолчанию: без коллектора экспортёр только шумит в логах.
+    OTEL_ENABLED: bool = False
+    OTEL_METRICS_ENABLED: bool = True
+    OTEL_TRACES_ENABLED: bool = True
+    # Версию держим в синхроне с pyproject: по ней в Grafana видно, какая
+    # выкатка изменила поведение.
+    OTEL_SERVICE_VERSION: str = "0.11.0-wh"
+    DEPLOY_ENVIRONMENT: str = "dev"
+    # База OTLP/HTTP, без пути: пути сигналов дописываются сами.
+    OTEL_EXPORTER_OTLP_ENDPOINT: str = "http://localhost:4318"
+    OTEL_EXPORTER_OTLP_HEADERS: str = ""
+    OTEL_EXPORT_TIMEOUT_SECS: int = 10
+    OTEL_METRIC_EXPORT_INTERVAL_MS: int = 15000
+    OTEL_SHUTDOWN_TIMEOUT_MS: int = 5000
+    # Доля трейсов. 1.0 приемлемо: задач немного, а спанов на задачу единицы.
+    OTEL_TRACES_SAMPLER_RATIO: float = 1.0
+    # Prometheus-эндпоинт на отдельном порту, помимо OTLP-пуша.
+    METRICS_HTTP_ENABLED: bool = True
+    METRICS_HTTP_HOST: str = "0.0.0.0"
+    METRICS_HTTP_PORT: int = 9464
+
     CORS_ORIGINS: List[str] = ["*"]
     CORS_ALLOW_CREDENTIALS: bool = True
     

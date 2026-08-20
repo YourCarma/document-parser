@@ -26,11 +26,16 @@ class CancellationTokenABC(ABC):
     task_key: str
 
     @abstractmethod
-    async def is_cancelled(self) -> bool:
-        """Никогда не бросает: любая ошибка опроса означает «не отменена»."""
+    async def is_cancelled(self, *, fresh: bool = False) -> bool:
+        """Никогда не бросает: любая ошибка опроса означает «не отменена».
 
-    async def raise_if_cancelled(self, stage: str = "") -> None:
-        if await self.is_cancelled():
+        `fresh=True` — не верить TTL-кэшу отрицательного ответа и сходить в
+        webhook_manager заново. Нужно там, где сразу после проверки мы сами
+        пишем статус задачи.
+        """
+
+    async def raise_if_cancelled(self, stage: str = "", *, fresh: bool = False) -> None:
+        if await self.is_cancelled(fresh=fresh):
             raise TaskCancelled(self.task_key, stage)
 
 
@@ -40,7 +45,7 @@ class NullCancellationToken(CancellationTokenABC):
     def __init__(self, task_key: str = ""):
         self.task_key = task_key
 
-    async def is_cancelled(self) -> bool:
+    async def is_cancelled(self, *, fresh: bool = False) -> bool:
         return False
 
 
@@ -66,10 +71,10 @@ class WebhookCancellationToken(CancellationTokenABC):
         self._checked_at = 0.0
         self._lock = asyncio.Lock()
 
-    async def is_cancelled(self) -> bool:
+    async def is_cancelled(self, *, fresh: bool = False) -> bool:
         if self._cancelled:
             return True
-        if time.monotonic() - self._checked_at < self._ttl_secs:
+        if not fresh and time.monotonic() - self._checked_at < self._ttl_secs:
             return False
 
         async with self._lock:
@@ -77,7 +82,7 @@ class WebhookCancellationToken(CancellationTokenABC):
             # сходить в webhook_manager.
             if self._cancelled:
                 return True
-            if time.monotonic() - self._checked_at < self._ttl_secs:
+            if not fresh and time.monotonic() - self._checked_at < self._ttl_secs:
                 return False
 
             try:

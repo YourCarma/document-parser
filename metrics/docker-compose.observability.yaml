@@ -1,0 +1,83 @@
+# Локальный стенд наблюдаемости: коллектор, Prometheus, Tempo, Grafana.
+#
+#   docker compose -f metrics/docker-compose.observability.yaml up -d
+#   OTEL_ENABLED=true PYTHONPATH=app python3 app/main.py
+#
+# Grafana:    http://localhost:3000 (вход не требуется, дашборд уже загружен)
+# Prometheus: http://localhost:9090
+# Метрики сервиса напрямую: http://localhost:9464/metrics
+#
+# Сервис сам в стенд не входит: его удобнее гонять из IDE. Коллектор слушает
+# 4317/4318 на localhost, а Prometheus ходит к сервису через host-gateway.
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.137.0
+    container_name: document-parser-otel-collector
+    restart: unless-stopped
+    command: ['--config=/etc/otelcol/config.yaml']
+    volumes:
+      - './otel-collector.yaml:/etc/otelcol/config.yaml:ro'
+    ports:
+      - '4317:4317'   # OTLP gRPC
+      - '4318:4318'   # OTLP HTTP — сюда шлёт сервис
+      - '8889:8889'   # метрики для Prometheus
+    depends_on:
+      - tempo
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: document-parser-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=7d'
+      - '--web.enable-lifecycle'
+    volumes:
+      - './prometheus.yml:/etc/prometheus/prometheus.yml:ro'
+      - './alerts:/etc/prometheus/alerts:ro'
+      - 'prometheus-data:/prometheus'
+    ports:
+      - '9090:9090'
+    extra_hosts:
+      # Сервис живёт на хосте, а не в compose: без этого прямой скрейп
+      # host.docker.internal:9464 не разрешится в Linux.
+      - 'host.docker.internal:host-gateway'
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: document-parser-tempo
+    restart: unless-stopped
+    command: ['-config.file=/etc/tempo/tempo.yaml']
+    user: root
+    volumes:
+      - './tempo.yaml:/etc/tempo/tempo.yaml:ro'
+      - 'tempo-data:/var/tempo'
+    ports:
+      - '3200:3200'
+
+  grafana:
+    image: grafana/grafana:12.2.0
+    container_name: document-parser-grafana
+    restart: unless-stopped
+    environment:
+      # Локальный стенд: вход не спрашиваем, иначе дашборд открывается через
+      # логин на каждом чистом браузере.
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: 'true'
+      GF_FEATURE_TOGGLES_ENABLE: traceqlEditor
+    volumes:
+      - './grafana/provisioning:/etc/grafana/provisioning:ro'
+      - './grafana/dashboards:/var/lib/grafana/dashboards:ro'
+      - 'grafana-data:/var/lib/grafana'
+    ports:
+      - '3000:3000'
+    depends_on:
+      - prometheus
+      - tempo
+
+volumes:
+  prometheus-data:
+  tempo-data:
+  grafana-data:

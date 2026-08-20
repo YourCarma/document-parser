@@ -10,6 +10,11 @@ from dataclasses import dataclass
 import aiohttp
 from loguru import logger
 
+from modules.metrics import (
+    TrackedSemaphore,
+    dependency_trace_config,
+    register_process_pool,
+)
 from modules.parser.v1.process_pool import ProcessPoolHolder
 from modules.resource_manager.service import ResourceManagerService
 from modules.watchtower.service import WatchtowerService
@@ -37,12 +42,22 @@ class AppRuntime:
         connector = aiohttp.TCPConnector(
             limit=settings.EXTERNAL_HTTP_CONNECTION_LIMIT,
         )
+        executor = ProcessPoolHolder(max_workers=settings.PARSER_WORKERS)
+        # Пул опрашивается наблюдаемой метрикой: рост поколения означает, что
+        # воркер погиб и пул пересобрали.
+        register_process_pool(executor)
         return cls(
-            http_session=aiohttp.ClientSession(timeout=timeout, connector=connector),
-            executor=ProcessPoolHolder(max_workers=settings.PARSER_WORKERS),
-            parser_semaphore=asyncio.Semaphore(settings.PARSER_WORKERS),
-            translation_semaphore=asyncio.Semaphore(
-                settings.TRANSLATOR_MAX_CONCURRENCY
+            http_session=aiohttp.ClientSession(
+                timeout=timeout,
+                connector=connector,
+                # Один trace_config на общую сессию даёт метрики всех
+                # исходящих вызовов сразу, без правок в клиентах.
+                trace_configs=[dependency_trace_config()],
+            ),
+            executor=executor,
+            parser_semaphore=TrackedSemaphore(settings.PARSER_WORKERS, "parser"),
+            translation_semaphore=TrackedSemaphore(
+                settings.TRANSLATOR_MAX_CONCURRENCY, "translation"
             ),
         )
 

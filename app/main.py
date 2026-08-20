@@ -8,6 +8,11 @@ from loguru import logger
 
 from modules.broker.abc.factory import BrokerFactory
 from modules.broker.dispatcher import build_default_dispatcher
+from modules.metrics import (
+    HTTPMetricsMiddleware,
+    setup_observability,
+    shutdown_observability,
+)
 from runtime import AppRuntime
 from settings import settings
 from api.routers import routers
@@ -53,6 +58,9 @@ async def lifespan(app: FastAPI):
             # Сначала консюмер: он пользуется сессией и пулом из runtime.
             await app.state.broker.stop()
         await runtime.shutdown()
+        # Последним: телеметрия должна пережить остальных, чтобы дослать
+        # события их остановки.
+        shutdown_observability()
 
 app = FastAPI(
     title="Document Parser",
@@ -120,6 +128,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
     
+app.add_middleware(HTTPMetricsMiddleware)
+
+# До старта приложения: авто-инструментация FastAPI добавляет свою мидлварь, а
+# после старта стек мидлварей уже собран и менять его нельзя.
+setup_observability(app)
+
 for router in routers:
     app.include_router(router)
 

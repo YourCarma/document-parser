@@ -42,13 +42,13 @@ class ScriptedToken(CancellationTokenABC):
         self.calls = 0
         self.stages: list[str] = []
 
-    async def is_cancelled(self) -> bool:
+    async def is_cancelled(self, *, fresh: bool = False) -> bool:
         self.calls += 1
         return self.calls >= self._cancel_on_call
 
-    async def raise_if_cancelled(self, stage: str = "") -> None:
+    async def raise_if_cancelled(self, stage: str = "", *, fresh: bool = False) -> None:
         self.stages.append(stage)
-        await super().raise_if_cancelled(stage)
+        await super().raise_if_cancelled(stage, fresh=fresh)
 
 
 class FakeDoclingDocument:
@@ -60,15 +60,36 @@ class FakeDoclingDocument:
             yield item, 0
 
 
+class FlagToken(CancellationTokenABC):
+    """Токен с ручным переключателем: момент отмены задаёт сам тест."""
+
+    def __init__(self, task_key: str = "task-key"):
+        self.task_key = task_key
+        self.cancelled = False
+        self.checks = 0
+        self.fresh_checks = 0
+
+    async def is_cancelled(self, *, fresh: bool = False) -> bool:
+        self.checks += 1
+        if fresh:
+            self.fresh_checks += 1
+        return self.cancelled
+
+
 class CountingTranslator:
     source_language = "en"
     target_language = "ru"
 
-    def __init__(self):
+    def __init__(self, cancel_token: FlagToken | None = None, cancel_after: int = 0):
         self.calls = 0
+        self._token = cancel_token
+        self._cancel_after = cancel_after
 
     async def translate_element_limited(self, text: str) -> str:
         self.calls += 1
+        # Пользователь жмёт «Отменить» посреди перевода.
+        if self._token is not None and self.calls == self._cancel_after:
+            self._token.cancelled = True
         return f"translated {text}"
 
 
@@ -216,8 +237,10 @@ class TranslationCancellationTest(unittest.IsolatedAsyncioTestCase):
                 target_language="en",
                 parser_params=ParserParams(file_path=Path("/tmp/source.docx")),
                 executor=object(),
-                # 3-я проверка — сразу после публикации прогресса 10.
-                cancellation=ScriptedToken(cancel_on_call=3),
+                # 5-я проверка — сразу после публикации прогресса 10:
+                # «до старта», bucket, два guard-а в _update (5 и 10),
+                # затем проверка после загрузки оригинала.
+                cancellation=ScriptedToken(cancel_on_call=5),
             )
 
         self.assertEqual(status, TaskStatus.CANCELLED)
@@ -269,7 +292,8 @@ class TranslationCancellationTest(unittest.IsolatedAsyncioTestCase):
             )
             for index in range(6)
         ]
-        translator = CountingTranslator()
+        token = FlagToken()
+        translator = CountingTranslator(cancel_token=token, cancel_after=2)
         service = self._service(AsyncMock(), AsyncMock(), AsyncMock())
         response_data = TranslatorResponseData(
             original_language="en",
@@ -293,9 +317,11 @@ class TranslationCancellationTest(unittest.IsolatedAsyncioTestCase):
                     FakeDoclingDocument(elements),
                     "task-key",
                     response_data,
-                    ScriptedToken(cancel_on_call=2),
+                    token,
                 )
 
+        # Отмена пришла на втором элементе первого батча: второй батч
+        # не стартовал.
         self.assertEqual(translator.calls, 2)
 
     async def test_cancellation_mid_translation_keeps_reached_progress(self):
@@ -311,6 +337,7 @@ class TranslationCancellationTest(unittest.IsolatedAsyncioTestCase):
         ]
         webhook = AsyncMock()
         service = self._service(webhook, AsyncMock(), AsyncMock())
+        token = FlagToken()
         response_data = TranslatorResponseData(
             original_language="en",
             target_language="ru",
@@ -329,17 +356,264 @@ class TranslationCancellationTest(unittest.IsolatedAsyncioTestCase):
         ):
             with self.assertRaises(TaskCancelled):
                 await service._translate_with_progress(
-                    CountingTranslator(),
+                    CountingTranslator(cancel_token=token, cancel_after=8),
                     FakeDoclingDocument(elements),
                     "task-key",
                     response_data,
-                    ScriptedToken(cancel_on_call=3),
+                    token,
                 )
 
         # Два батча по 4 элемента: 15 + 78 * (8 / 40) = 30.6
         self.assertAlmostEqual(service._last_progress, 30.6, places=3)
         published = [call.args[1] for call in webhook.update_progress.await_args_list]
-        self.assertEqual(service._last_progress, max(published))
+        # Публиковать PROCESSING после отмены нельзя, поэтому достигнутый
+        # прогресс может обгонять последнюю публикацию — но не отставать.
+        self.assertGreaterEqual(service._last_progress, max(published))
+        self.assertNotIn(
+            TaskStatus.CANCELLED,
+            [call.args[2] for call in webhook.update_progress.await_args_list],
+        )
+
+
+class CancelledStatusOverwriteTest(unittest.IsolatedAsyncioTestCase):
+    """Отмена живёт в том же поле status, что и прогресс: не затирать её."""
+
+    @staticmethod
+    def _service(webhook):
+        return TranslatorV2Service(
+            webhook=webhook,
+            watchtower=AsyncMock(),
+            resource_manager=AsyncMock(),
+        )
+
+    async def test_update_does_not_publish_processing_after_cancellation(self):
+        webhook = AsyncMock()
+        service = self._service(webhook)
+        token = FlagToken()
+        token.cancelled = True
+        service._cancellation = token
+
+        with self.assertRaises(TaskCancelled):
+            await service._update(
+                "task-key",
+                TranslatorResponseData(original_language="en", target_language="ru"),
+                42,
+                TaskStatus.PROCESSING,
+                "Перевожу...",
+            )
+
+        webhook.update_progress.assert_not_awaited()
+        # Проверка была свежей: кэш TTL здесь и приводил к затиранию.
+        self.assertEqual(token.fresh_checks, 1)
+
+    async def test_terminal_publication_is_not_blocked_by_cancellation(self):
+        webhook = AsyncMock()
+        service = self._service(webhook)
+        token = FlagToken()
+        token.cancelled = True
+        service._cancellation = token
+
+        published = await service._publish_terminal(
+            "task-key",
+            TranslatorResponseData(original_language="en", target_language="ru"),
+            42,
+            TaskStatus.CANCELLED,
+            "Задача отменена",
+        )
+
+        self.assertTrue(published)
+        webhook.update_progress.assert_awaited_once()
+
+    async def test_progress_update_inside_translation_skips_write_after_cancel(self):
+        elements = [
+            TextItem(
+                self_ref=f"#/texts/{index}",
+                label=DocItemLabel.TEXT,
+                orig=f"block {index}",
+                text=f"block {index}",
+            )
+            for index in range(4)
+        ]
+        webhook = AsyncMock()
+        service = TranslatorV2Service(
+            webhook=webhook,
+            watchtower=AsyncMock(),
+            resource_manager=AsyncMock(),
+        )
+        token = FlagToken()
+
+        with (
+            patch("modules.translator.v2.service.settings.TRANSALTOR_MAX_CONCURRENCY", 4),
+            patch.object(
+                service, "_export_to_word", AsyncMock(return_value="/tmp/result.docx")
+            ),
+        ):
+            with self.assertRaises(TaskCancelled):
+                await service._translate_with_progress(
+                    CountingTranslator(cancel_token=token, cancel_after=1),
+                    FakeDoclingDocument(elements),
+                    "task-key",
+                    TranslatorResponseData(
+                        original_language="en", target_language="ru"
+                    ),
+                    token,
+                )
+
+        statuses = [c.args[2] for c in webhook.update_progress.await_args_list]
+        self.assertNotIn(TaskStatus.PROCESSING, statuses)
+
+
+class InBatchCancellationTest(unittest.IsolatedAsyncioTestCase):
+    async def test_cancellation_stops_batch_without_translating_the_rest(self):
+        elements = [
+            TextItem(
+                self_ref=f"#/texts/{index}",
+                label=DocItemLabel.TEXT,
+                orig=f"block {index}",
+                text=f"block {index}",
+            )
+            for index in range(5)
+        ]
+        service = TranslatorV2Service(
+            webhook=AsyncMock(),
+            watchtower=AsyncMock(),
+            resource_manager=AsyncMock(),
+        )
+        token = FlagToken()
+        translator = CountingTranslator(cancel_token=token, cancel_after=1)
+
+        with (
+            patch("modules.translator.v2.service.settings.TRANSALTOR_MAX_CONCURRENCY", 5),
+            patch.object(
+                service, "_export_to_word", AsyncMock(return_value="/tmp/result.docx")
+            ),
+        ):
+            with self.assertRaises(TaskCancelled):
+                await service._translate_with_progress(
+                    translator,
+                    FakeDoclingDocument(elements),
+                    "task-key",
+                    TranslatorResponseData(
+                        original_language="en", target_language="ru"
+                    ),
+                    token,
+                )
+
+        # Весь батч раньше уходил в перевод целиком: проверка была только
+        # на его границе.
+        self.assertEqual(translator.calls, 1)
+
+    async def test_batch_is_drained_before_cancellation_propagates(self):
+        """Осиротевшая корутина батча дописала бы PROCESSING поверх CANCELLED."""
+
+        class SlowTranslator:
+            source_language = "en"
+            target_language = "ru"
+
+            def __init__(self, token):
+                self.calls = 0
+                self.finished = 0
+                self._token = token
+
+            async def translate_element_limited(self, text: str) -> str:
+                self.calls += 1
+                if self.calls == 1:
+                    self._token.cancelled = True
+                    await asyncio.sleep(0.05)
+                self.finished += 1
+                return f"translated {text}"
+
+        elements = [
+            TextItem(
+                self_ref=f"#/texts/{index}",
+                label=DocItemLabel.TEXT,
+                orig=f"block {index}",
+                text=f"block {index}",
+            )
+            for index in range(4)
+        ]
+        service = TranslatorV2Service(
+            webhook=AsyncMock(),
+            watchtower=AsyncMock(),
+            resource_manager=AsyncMock(),
+        )
+        token = FlagToken()
+        translator = SlowTranslator(token)
+
+        with (
+            patch("modules.translator.v2.service.settings.TRANSALTOR_MAX_CONCURRENCY", 4),
+            patch.object(
+                service, "_export_to_word", AsyncMock(return_value="/tmp/result.docx")
+            ),
+        ):
+            with self.assertRaises(TaskCancelled):
+                await service._translate_with_progress(
+                    translator,
+                    FakeDoclingDocument(elements),
+                    "task-key",
+                    TranslatorResponseData(
+                        original_language="en", target_language="ru"
+                    ),
+                    token,
+                )
+
+        self.assertEqual(translator.calls, 1)
+        self.assertEqual(translator.finished, 1)
+
+
+class ParseStageCancellationTest(unittest.IsolatedAsyncioTestCase):
+    @staticmethod
+    def _service():
+        return TranslatorV2Service(
+            webhook=AsyncMock(),
+            watchtower=AsyncMock(),
+            resource_manager=AsyncMock(),
+        )
+
+    async def test_await_or_cancel_returns_result(self):
+        async def work():
+            return "docling-doc"
+
+        result = await self._service()._await_or_cancel(
+            work(), FlagToken(), "parse document"
+        )
+
+        self.assertEqual(result, "docling-doc")
+
+    async def test_await_or_cancel_interrupts_endless_parsing(self):
+        started = asyncio.Event()
+        cancelled_inside = asyncio.Event()
+
+        async def endless():
+            started.set()
+            try:
+                await asyncio.sleep(3600)
+            except asyncio.CancelledError:
+                cancelled_inside.set()
+                raise
+
+        token = FlagToken()
+
+        async def flip():
+            await started.wait()
+            token.cancelled = True
+
+        with (
+            patch("modules.translator.v2.service._MIN_CANCEL_POLL_SECS", 0.01),
+            patch(
+                "modules.translator.v2.service.settings.TASK_CANCEL_CHECK_TTL_SECS",
+                0.01,
+            ),
+        ):
+            flipper = asyncio.create_task(flip())
+            with self.assertRaises(TaskCancelled):
+                await self._service()._await_or_cancel(
+                    endless(), token, "parse document"
+                )
+            await flipper
+
+        # Ожидание брошено, воркер парсинга снят с петли ожидания.
+        self.assertTrue(cancelled_inside.is_set())
 
 
 if __name__ == "__main__":
