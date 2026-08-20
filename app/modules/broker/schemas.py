@@ -19,16 +19,51 @@ class TaskType(str, Enum):
 
 
 class TaskEnvelope(BaseModel):
-    """Общий конверт сообщения. `payload` — сервис-специфичный."""
+    """Общий конверт сообщения. `payload` — сервис-специфичный.
+
+    Описания полей не декоративные: из них собирается контракт, который
+    сервис отдаёт продюсерам на `GET /api/v1/contract`.
+    """
 
     model_config = ConfigDict(extra="ignore")
 
-    task_id: str
-    user_id: str
-    task_type: str
-    payload: dict[str, Any] = Field(default_factory=dict)
+    task_id: str = Field(
+        description=(
+            "Идентификатор задачи, уникальный на задачу. Повторная публикация "
+            "того же task_id безопасна: сервис проверит статус и не станет "
+            "переделывать уже выполненную работу."
+        ),
+        examples=["5fb0b68c-2259-47d8-8e72-3dc517ac6d4d"],
+    )
+    user_id: str = Field(
+        description=(
+            "Владелец задачи. По нему определяется бакет пользователя, "
+            "поэтому поле обязательное. Число тоже принимается и приводится "
+            "к строке."
+        ),
+        examples=["1234"],
+    )
+    task_type: str = Field(
+        description=(
+            "Тип задачи. Сопоставление регистронезависимое, '_' считается "
+            "равным '-'. Префикс до точки попадает в ключ задачи "
+            "webhook_manager."
+        ),
+        examples=["document-parser.translate"],
+    )
+    payload: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Параметры задачи, свои для каждого task_type.",
+    )
     # Если гейтвей когда-нибудь пришлёт готовый ключ — он важнее собранного.
-    task_key: str | None = None
+    task_key: str | None = Field(
+        default=None,
+        description=(
+            "Готовый ключ задачи в webhook_manager. Если передан, сервис "
+            "использует его как есть, не собирая из user_id и task_id."
+        ),
+        examples=["1234:document-parser:5fb0b68c-2259-47d8-8e72-3dc517ac6d4d"],
+    )
 
     @field_validator("task_id", "user_id", "task_type", mode="before")
     @classmethod
@@ -63,13 +98,50 @@ class TranslatePayload(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    file_path: str
-    source_language: str = "auto"
-    target_language: str = "ru"
-    output_prefix: str | None = None
-    parse_images: bool = False
-    include_image_in_output: bool = False
-    full_vlm_pdf_parse: bool = False
+    file_path: str = Field(
+        description=(
+            "Object key исходного файла внутри бакета пользователя — без "
+            "имени бакета и без ведущего слэша. Расширение обязано быть из "
+            "списка поддерживаемых: оно проверяется до скачивания."
+        ),
+        examples=["documents/report.pdf"],
+    )
+    source_language: str = Field(
+        default="auto",
+        description=(
+            "Код языка оригинала по ISO 639 либо 'auto' — тогда язык "
+            "определяется по первым абзацам документа."
+        ),
+        examples=["auto", "en"],
+    )
+    target_language: str = Field(
+        default="ru",
+        description="Код целевого языка по ISO 639.",
+        examples=["ru"],
+    )
+    output_prefix: str | None = Field(
+        default=None,
+        description=(
+            "Префикс в бакете для переведённого файла. По умолчанию берётся "
+            "из настройки сервиса TRANSLATE_OUTPUT_PREFIX."
+        ),
+        examples=["translated/5fb0b68c-2259-47d8-8e72-3dc517ac6d4d"],
+    )
+    parse_images: bool = Field(
+        default=False,
+        description=(
+            "Распознавать встроенные изображения через VLM. Заметно дольше и "
+            "требует доступной VLM."
+        ),
+    )
+    include_image_in_output: bool = Field(
+        default=False,
+        description="Встраивать изображения в промежуточный Markdown как base64.",
+    )
+    full_vlm_pdf_parse: bool = Field(
+        default=False,
+        description="Отдавать PDF целиком в VLM вместо разбора через Docling.",
+    )
 
     @field_validator("source_language", "target_language", mode="before")
     @classmethod

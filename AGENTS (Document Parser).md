@@ -18,7 +18,7 @@ OCR по картинкам и «сложным» PDF — внешняя VLM с 
 | --- | --- | --- | --- |
 | Parser V1 | `/api/v1/parser/parse/*` | синхронный | Markdown-строка, `.md`, `.docx` |
 | Translator V1 | `/api/v1/parser/translator/*` | синхронный | переведённый Markdown, `.md`, `.docx` |
-| Translator V2 | `/api/v2/parser/translator/file/word` | асинхронный | `task_id` + файлы в облаке пользователя |
+| Translator V2 | очередь `document-parser.translate` | асинхронный | файлы в облаке пользователя, статус в `webhook_manager` |
 
 Плюс служебные `GET /` и `GET /health`.
 
@@ -46,6 +46,9 @@ app/
     resource_manager/         клиент поиска персонального бакета пользователя
     webhook_manager/          клиент задач: create_task, update_progress, update_response_data, get_task
                               + cancellation.py (токены отмены задачи)
+    contract/                 самоописание сервиса для продюсеров очереди
+                              service.py (сборка контракта), markdown.py (рендер),
+                              router.py (GET /api/v1/contract и contract.md)
     metrics/                  наблюдаемость: OpenTelemetry, метрики, трейсы
                               otel.py (инициализация), instruments.py (все метрики),
                               stages.py (тайминги этапов), http.py (свой API и зависимости),
@@ -84,9 +87,11 @@ POST /api/v1/parser/parse/{text|file|file/word}
 
 ### Асинхронный перевод (V2)
 
-Роутер создаёт задачу в `webhook_manager`, сразу отдаёт `task_id`/`key` и ставит
-`run_translation_task` в `BackgroundTasks`. Подробности, шкала прогресса и
-инварианты — в [`app/modules/translator/v2/AGENTS.md`](app/modules/translator/v2/AGENTS.md).
+HTTP-входа у него нет: задачу ставит клиент через `task_gateway`, гейтвей
+заводит запись в `webhook_manager` и публикует сообщение, консюмер вызывает
+`run_translation_task`. Подробности, шкала прогресса и инварианты — в
+[`app/modules/translator/v2/AGENTS.md`](app/modules/translator/v2/AGENTS.md),
+контракт для клиента отдаёт сам сервис на `GET /api/v1/contract.md`.
 
 ## 4. Как выбирается парсер
 
@@ -137,9 +142,9 @@ POST /api/v1/parser/parse/{text|file|file/word}
 | VLM (OpenAI-совместимый `/v1/chat/completions`) | `VLM_BASE_URL`, `VLM_MODEL_NAME`, `VLM_API_KEY` | `parse_images=true`, картинки, `full_vlm_pdf_parse` |
 | Сервис перевода | `TRANSLATOR_ADDRESS` + `TRANSLATE_URI` | оба переводчика |
 | Детектор языка | `DETECT_LANGUAGE_URL` | `source_language=auto` |
-| `webhook_manager` | `WEBHOOK_MANAGER_URL` | Translator V2 |
-| `watchtower` (хранилище) | `WATCHTOWER_URL` | Translator V2 |
-| `resource_manager` | `RESOURCE_MANAGER_URL` | Translator V2 |
+| `webhook_manager` | `WEBHOOK_MANAGER_URL` | асинхронный перевод из очереди |
+| `watchtower` (хранилище) | `WATCHTOWER_URL` | асинхронный перевод из очереди |
+| `resource_manager` | `RESOURCE_MANAGER_URL` | асинхронный перевод из очереди |
 | LibreOffice (`soffice`) | системный пакет | `.doc`, `.rtf` |
 | pandoc | системный пакет | любой экспорт `TO_WORD` |
 | модели Docling | каталог `ml/` (`ML_DIR`) | офлайн-парсинг без похода в HuggingFace |
@@ -226,7 +231,29 @@ PYTHONPATH=app poetry run python -m unittest discover -s tests -t tests
   `"main:app"`, — и запросы обслуживает второй объект приложения. Общий флаг
   «уже настроено» оставил бы его без трейсов при работающих метриках.
 
-## 10. Инварианты и подводные камни
+## 10. Контракт задач
+
+`GET /api/v1/contract` (JSON со схемами) и `GET /api/v1/contract.md` (Markdown
+для человека или ИИ-агента) — самоописание сервиса для команд, которые ставят
+сюда задачи. Код в `app/modules/contract/`.
+
+Правило одно, но важное: **контракт собирается из кода, а не пишется рядом**.
+Типы задач берутся из реестра обработчиков, поля и их описания — из
+JSON Schema моделей `TaskEnvelope` и `payload_model` каждого обработчика,
+топология и лимиты — из настроек. Поэтому:
+
+- описание нового поля пишется в `Field(description=...)` модели, а не в
+  Markdown — иначе оно не попадёт ни в контракт, ни в `/docs`;
+- новый обработчик появляется в документации сам, ничего дописывать не надо;
+- прозу, которую из моделей не вывести (правила, чек-лист, семантика
+  повторов), держите в константах `contract/service.py` рядом с остальными
+  правилами.
+
+Тесты проверяют, что каждое поле имеет описание, что примеры из документации
+проходят реальную валидацию `parse_envelope`, и что перечень типов задач
+совпадает с реестром.
+
+## 11. Инварианты и подводные камни
 
 - **Расширение важнее MIME.** Парсер выбирается по суффиксу временного файла,
   а суффикс берётся из имени, присланного клиентом. Меняя валидацию, не сломайте
@@ -282,12 +309,13 @@ PYTHONPATH=app poetry run python -m unittest discover -s tests -t tests
   Парсинг своих контрольных точек не имеет, поэтому `_await_or_cancel` опрашивает
   отмену параллельно ожиданию (шаг — `TASK_CANCEL_CHECK_TTL_SECS`, но не чаще
   `_MIN_CANCEL_POLL_SECS`).
-- **Задачи V2 живут в `BackgroundTasks`** — не переживают рестарт процесса и не
-  ограничены по количеству; общий лимит времени задаёт `TASK_TIMEOUT_SECS`.
-- **Аутентификации нет.** `X-User-ID` принимается на веру, сервис рассчитан на
-  работу за шлюзом.
+- **Задачи V2 идут только из очереди** и живут внутри обработки сообщения:
+  рестарт пода их не теряет, число одновременных ограничено
+  `RMQ_PREFETCH_COUNT`, общий лимит времени — `TASK_TIMEOUT_SECS`.
+- **Аутентификации нет.** `user_id` из сообщения принимается на веру, сервис
+  рассчитан на работу за гейтвеем.
 
-## 11. Тесты
+## 12. Тесты
 
 | Файл | Что покрывает |
 | --- | --- |

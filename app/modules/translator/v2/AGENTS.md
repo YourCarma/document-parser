@@ -11,16 +11,18 @@
 в облачное хранилище пользователя и публикует прогресс задачи.
 
 Отличие от `translator/v1`: v1 синхронный (результат возвращается в том же HTTP-
-ответе), v2 асинхронный — клиент сразу получает `task_id` и опрашивает прогресс
-в `webhook_manager`.
+ответе), v2 асинхронный и **доступен только из очереди** — задачу ставит клиент
+через `task_gateway`, а прогресс опрашивает в `webhook_manager`. Своего
+HTTP-эндпоинта у v2 больше нет: `router.py` удалён вместе с
+`POST /api/v2/parser/translator/file/word`.
 
 ## 2. Файлы модуля
 
 | Файл | Роль |
 | --- | --- |
-| `router.py` | `POST /api/v2/parser/translator/file/word` — приём файла, создание задачи, постановка в `BackgroundTasks`. |
 | `service.py` | `TranslatorV2Service` — весь фоновый конвейер. |
-| `schemas.py` | `TranslatorResponseData` (снимок состояния задачи), `TranslationOutcome` (результат этапа перевода), `TranslatorV2Response` (ответ роутера). |
+| `schemas.py` | `TranslatorResponseData` (снимок состояния задачи), `TranslationOutcome` (результат этапа перевода). |
+| `sources.py` | Откуда берётся исходный файл: `WatchtowerSource` для очереди, `LocalUploadSource` для локального пути. |
 | `exceptions.py` | `TaskTimeout` — превышен лимит времени этапа. |
 
 ## 3. Внешние зависимости
@@ -58,11 +60,12 @@
 ## 4. Поток выполнения
 
 ```
-POST /api/v2/parser/translator/file/word  (X-User-ID, файл, языки, параметры парсера)
+task_gateway POST /api/v1/broker/publish  (x-user-id, task_type, payload)
   │
-  ├─ webhook.create_task(...)            -> task_key = "user:service:task_id"
-  ├─ save_file(upload)                   -> временный файл на диске
-  └─ BackgroundTasks.add_task(run_translation_task)   -> 200 {task_id, key}
+  ├─ гейтвей создаёт задачу в webhook_manager -> task_key = "user:service:task_id"
+  └─ гейтвей публикует сообщение в очередь
+       │
+       └─ консюмер -> TranslateHandler -> run_translation_task
 
 run_translation_task (фон):
   1. resolve user bucket      resource_manager.get_user_bucket
@@ -213,8 +216,10 @@ run_translation_task (фон):
   осознанное решение против двойного кодирования кириллицы.
 - `_export_to_word_sync` использует приватный `DoclingDocument._make_copy_with_refmode`
   — при апгрейде docling проверять в первую очередь это место.
-- Задача живёт в `BackgroundTasks`: она не переживает рестарт процесса. Общий
-  лимит времени задаёт `TASK_TIMEOUT_SECS`.
+- Задача живёт внутри обработки сообщения: рестарт пода её не теряет —
+  неподтверждённое сообщение вернётся в очередь и доиграется другой репликой.
+  Общий лимит времени задаёт `TASK_TIMEOUT_SECS`, и он обязан быть заметно
+  ниже `consumer_timeout` брокера.
 - `asyncio.timeout` **не убивает воркер парсинга**: по `PARSE_TIMEOUT_SECS`
   отменяется только ожидание, слот `parser_semaphore` освобождается раньше, чем
   реально завершится процесс. Принято осознанно, в лог пишется `logger.error`

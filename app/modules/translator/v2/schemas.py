@@ -16,11 +16,16 @@ class TranslatorResponseData(BaseModel):
     )
     original_file: str = Field(
         default="",
-        description="Share-ссылка на оригинальный файл в хранилище.",
+        description=(
+            "Object key оригинального файла внутри бакета пользователя. "
+            "Именно ключ, а не ссылка: ссылка протухает по сроку."
+        ),
+        examples=["documents/report.pdf"],
     )
     translated_file: str = Field(
         default="",
-        description="Share-ссылка на переведённый файл в хранилище.",
+        description="Object key переведённого файла внутри бакета пользователя.",
+        examples=["translated/5fb0b68c/report_(переведённый).docx"],
     )
     text_status: str = Field(
         default="Задача принята",
@@ -40,15 +45,4 @@ class TranslationOutcome(BaseModel):
     untranslated_count: int = Field(
         default=0,
         description="Сколько элементов не переведено.",
-    )
-
-
-class TranslatorV2Response(BaseModel):
-    task_id: str = Field(
-        description="Идентификатор созданной асинхронной задачи.",
-        examples=["8d6d5d4e-b4cb-4cf0-8d46-0e6e23a6b469"],
-    )
-    key: str = Field(
-        description="Ключ задачи в формате `user_id:service:task_id`.",
-        examples=["user-42:document-parser:8d6d5d4e-b4cb-4cf0-8d46-0e6e23a6b469"],
     )
