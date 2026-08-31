@@ -33,7 +33,9 @@ dependencies = [
     "opentelemetry-exporter-prometheus (>=0.65b0,<1.0.0)",
     "opentelemetry-instrumentation-fastapi (>=0.65b0,<1.0.0)",
     "opentelemetry-instrumentation-aiohttp-client (>=0.65b0,<1.0.0)",
-    "opentelemetry-instrumentation-aio-pika (>=0.65b0,<1.0.0)"
+    "opentelemetry-instrumentation-aio-pika (>=0.65b0,<1.0.0)",
+    "pytest (>=9.1.1,<10.0.0)",
+    "pytest-cov (>=7.1.0,<8.0.0)"
 ]
 
 [build-system]
@@ -42,3 +44,11 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.group.dev.dependencies]
 yapf = "^0.43.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["app", "."]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/test_data/*"]
