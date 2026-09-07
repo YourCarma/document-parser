@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, call, patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 import aiohttp
 from docling_core.types.doc import DocItemLabel, TextItem
@@ -156,6 +156,45 @@ class TranslatorV2ServiceTest(unittest.IsolatedAsyncioTestCase):
                     "Отчет_(переведённый).docx",
                 ),
             ],
+        )
+
+    async def test_include_image_flag_reaches_translator(self):
+        """Флаг клиента определяет режим картинок при экспорте в .docx.
+
+        Экспорт берёт image_mode из переводчика, поэтому константа False в
+        конструкторе молча выбрасывала бы картинки у всех задач из очереди.
+        """
+        webhook = AsyncMock()
+        service = self._service(webhook)
+        translator_cls = Mock()
+
+        with (
+            patch(
+                "modules.translator.v2.service.run_in_process",
+                AsyncMock(return_value=FakeDoclingDocument([])),
+            ),
+            patch("modules.translator.v2.service.CustomModelTranslator", translator_cls),
+            patch.object(
+                service,
+                "_translate_with_progress",
+                AsyncMock(
+                    return_value=TranslationOutcome(file_path="/tmp/translated.docx")
+                ),
+            ),
+            patch("modules.translator.v2.service.delete_file", AsyncMock()),
+        ):
+            status = await self._run(
+                service,
+                parser_params=ParserParams(
+                    file_path=Path("/tmp/source.docx"),
+                    include_image_in_output=True,
+                ),
+            )
+
+        self.assertEqual(status, TaskStatus.READY)
+        translator_cls.assert_called_once()
+        self.assertIs(
+            translator_cls.call_args.kwargs["include_image_in_output"], True
         )
 
     async def test_translate_with_progress_keeps_original_text_on_timeout(self):

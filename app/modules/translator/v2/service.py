@@ -266,7 +266,9 @@ class TranslatorV2Service:
                     source=Path(file_path),
                     source_language=source_language,
                     target_language=target_language,
-                    include_image_in_output=False,
+                    # Режим картинок при экспорте в .docx берётся из переводчика,
+                    # поэтому флаг клиента должен дойти именно сюда.
+                    include_image_in_output=bool(parser_params.include_image_in_output),
                     max_concurrency=settings.TRANSLATOR_MAX_CONCURRENCY,
                     shared_semaphore=self.translation_semaphore,
                     http_session=self.http_session or self.webhook.session,

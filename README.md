@@ -274,6 +274,7 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.observability:4318
 | --- | --- |
 | [`AGENTS (Document Parser).md`](AGENTS%20%28Document%20Parser%29.md) | Карта репозитория: модули, поток запроса, инварианты |
 | [`app/modules/translator/v2/AGENTS.md`](app/modules/translator/v2/AGENTS.md) | Детали асинхронного перевода и отмены задач |
+| [`docs/frontend-integration.md`](docs/frontend-integration.md) | Инструкция для фронтенда: task gateway, webhook manager, файлы, отмена |
 | [`docs/rabbitmq-integration.md`](docs/rabbitmq-integration.md) | Архитектура интеграции с очередью |
 | [`metrics/README.md`](metrics/README.md) | Метрики, трейсы, дашборд, алерты |
 | `docs/*.drawio.png` | Схемы контекста и логики парсера |

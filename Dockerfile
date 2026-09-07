@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM nvidia/cuda:13.1.1-devel-ubuntu24.04 AS builder
 
 ENV PYTHONUNBUFFERED=1 \
@@ -24,8 +25,11 @@ ENV PATH="/root/.local/bin:$PATH"
 
 COPY pyproject.toml poetry.lock ./
 
-RUN poetry config installer.max-workers 1 && \
-    poetry install --no-root --without dev -vvv
+# Кэш колёс переживает пересборку: при изменении lock torch и nvidia-*
+# не качаются заново. Параллелизм установки оставлен по умолчанию, от
+# обрывов сети защищают POETRY_REQUESTS_MAX_RETRIES/TIMEOUT выше.
+RUN --mount=type=cache,target=/root/.cache/pypoetry \
+    poetry install --no-root --without dev
 
 FROM nvidia/cuda:13.1.1-runtime-ubuntu24.04 AS production
 
@@ -57,12 +61,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /document-parser/.venv /document-parser/.venv
-COPY . .
+# Пользователь создаётся до COPY: --chown резолвит имя по /etc/passwd образа.
+# Права выставляются при копировании, а не отдельным chown -R: тот проходил по
+# всему venv и дублировал его в отдельном слое при каждой правке кода.
+RUN useradd -m appuser
 
-RUN useradd -m appuser && \
-    mkdir -p /app/.cache && \
-    chown -R appuser:appuser /app
+COPY --from=builder --chown=appuser:appuser /document-parser/.venv /document-parser/.venv
+COPY --chown=appuser:appuser . .
+
+# Кэш HF должен быть доступен на запись непривилегированному пользователю:
+# иначе любая докачка модели упадёт с Permission denied.
+RUN mkdir -p /document-parser/.cache/huggingface && \
+    chown -R appuser:appuser /document-parser/.cache
 
 USER appuser
 
@@ -70,4 +80,7 @@ EXPOSE 8012
 # Prometheus-эндпоинт наблюдаемости (METRICS_HTTP_PORT).
 EXPOSE 9464
 WORKDIR /document-parser/app
+# /health отдаёт 503, если консюмер очереди включён, но не потребляет.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8012/health || exit 1
 ENTRYPOINT ["python", "main.py"]
