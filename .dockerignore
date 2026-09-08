@@ -1,8 +1,11 @@
 documents/
 ml/
-test_data
+**/test_data
 docs
-__pycache__
+**/__pycache__
+htmlcov/
+.pytest_cache/
+**/*.log
 .env
 .env.*
 !.env.example

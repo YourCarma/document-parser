@@ -1,6 +1,9 @@
 from pathlib import Path
+import signal
 import tempfile
 import os
+from concurrent.futures import Executor
+from concurrent.futures.process import BrokenProcessPool
 from typing import Union, Optional
 import asyncio
 import subprocess
@@ -9,10 +12,37 @@ from loguru import logger
 from fastapi import UploadFile
 from starlette.background import BackgroundTask
 
-from modules.parser.v1.schemas import ConvertationOutputs, ParserMods, ParserParams
+from modules.parser.v1.exceptions import ConversionTimeoutError, ProcessPoolUnavailable
+from modules.parser.v1.process_pool import ProcessPoolHolder
+from modules.parser.v1.schemas import (
+    ConvertationOutputs,
+    FileFormats,
+    ParserMods,
+    ParserParams,
+)
+from settings import settings
 
 
 UPLOAD_CHUNK_SIZE = 1024 * 1024
+
+# Расширения, для которых ParserFactory умеет подобрать парсер.
+SUPPORTED_EXTENSIONS: frozenset[str] = frozenset(
+    ext.lower() for fmt in FileFormats for ext in fmt.value
+)
+
+# Сколько ждать мягкого завершения soffice перед SIGKILL.
+_SOFFICE_KILL_GRACE_SECS: float = 5.0
+
+
+def is_supported_extension(file_name: Union[str, Path]) -> bool:
+    """Проверить, поддерживается ли расширение файла парсером.
+
+    Никогда не бросает: файл без расширения — просто `False`.
+    """
+    suffix = Path(str(file_name)).suffix
+    if not suffix:
+        return False
+    return suffix.lower() in SUPPORTED_EXTENSIONS
 
 
 async def save_file(file: UploadFile) -> Path:
@@ -93,17 +123,47 @@ def read_file_content(file_path: Path):
     except Exception as e:
         logger.error(f"Error on deleting \"{file_path}\" file: {e}")
 
-async def run_in_process(fn, app_executor, *args, semaphore=None):
+async def run_in_process(fn, app_executor, *args, semaphore=None, retries: int = 1):
+    """Выполнить `fn` в пуле процессов, переживая гибель воркера.
+
+    `app_executor` — штатно `ProcessPoolHolder`; голый `Executor` принимается
+    для обратной совместимости, но пересобрать его нельзя.
+    """
     loop = asyncio.get_running_loop()
-    if semaphore is None:
-        return await loop.run_in_executor(app_executor, fn, *args)
-    async with semaphore:
-        return await loop.run_in_executor(app_executor, fn, *args)
+    is_holder = isinstance(app_executor, ProcessPoolHolder)
+
+    for attempt in range(retries + 1):
+        if is_holder:
+            executor: Executor = await app_executor.get()
+        else:
+            executor = app_executor
+
+        try:
+            # Семафор живёт внутри одной попытки: удерживать слот через
+            # пересборку пула значит держать очередь на сломанном пуле.
+            if semaphore is None:
+                return await loop.run_in_executor(executor, fn, *args)
+            async with semaphore:
+                return await loop.run_in_executor(executor, fn, *args)
+        except BrokenProcessPool as exc:
+            if not is_holder or attempt >= retries:
+                raise ProcessPoolUnavailable(
+                    "Процесс парсинга был прерван. Повторите попытку."
+                ) from exc
+            await app_executor.rebuild(executor)
+            logger.error(
+                "run_in_process: parsing worker died, pool rebuilt "
+                "attempt={} fn='{}'",
+                attempt + 1,
+                getattr(fn, "__name__", fn),
+            )
+
 
 def convert_doc_to(
     input_file_path: Union[Path, str],
     output_format: str,
     output_dir: Optional[Union[Path, str]] = None,
+    timeout_secs: Optional[int] = None,
 ) -> Path:
     input_path = Path(input_file_path).resolve()
 
@@ -138,18 +198,31 @@ def convert_doc_to(
         str(input_path),
     ]
 
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    if timeout_secs is None:
+        timeout_secs = settings.SOFFICE_TIMEOUT_SECS
 
-    if result.returncode != 0:
+    # start_new_session=True: soffice плодит дочерние процессы, и убить нужно
+    # всю группу — иначе зависший конвертер переживёт таймаут.
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout_secs)
+    except subprocess.TimeoutExpired:
+        _kill_soffice_process_group(proc)
+        raise ConversionTimeoutError(
+            f"Конвертация '{input_path.name}' превысила {timeout_secs} с"
+        )
+
+    if proc.returncode != 0:
         raise RuntimeError(
             f"Conversion failed.\n"
-            f"stdout:\n{result.stdout}\n"
-            f"stderr:\n{result.stderr}"
+            f"stdout:\n{stdout}\n"
+            f"stderr:\n{stderr}"
         )
 
     output_path = outdir / f"{input_path.stem}.{output_format}"
@@ -157,8 +230,48 @@ def convert_doc_to(
     if not output_path.exists():
         raise RuntimeError(
             f"LibreOffice finished without an error code, but output file was not created: {output_path}\n"
-            f"stdout:\n{result.stdout}\n"
-            f"stderr:\n{result.stderr}"
+            f"stdout:\n{stdout}\n"
+            f"stderr:\n{stderr}"
         )
 
     return output_path
+
+
+def _kill_soffice_process_group(proc: subprocess.Popen) -> None:
+    """Прибить зависший soffice: сначала мягко группу, потом жёстко."""
+    try:
+        pgid = os.getpgid(proc.pid)
+    except ProcessLookupError:
+        logger.debug("soffice: the process had already exited before the signal was sent")
+        return
+
+    if pgid != proc.pid:
+        # setsid не успел отработать (гонка на старте) — группа чужая,
+        # бить по ней нельзя, иначе заденем посторонние процессы.
+        logger.debug(
+            "soffice: pgid={} does not match pid={}, killing the process only",
+            pgid,
+            proc.pid,
+        )
+        proc.kill()
+        proc.wait()
+        return
+
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except ProcessLookupError:
+        logger.debug("soffice: group {} had already exited", pgid)
+        return
+
+    try:
+        proc.wait(timeout=_SOFFICE_KILL_GRACE_SECS)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except ProcessLookupError:
+        logger.debug("soffice: group {} exited between SIGTERM and SIGKILL", pgid)
+        return
+    proc.wait()

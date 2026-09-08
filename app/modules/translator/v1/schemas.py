@@ -10,6 +10,29 @@ from modules.parser.v1.exceptions import ContentNotSupportedError
 from modules.translator.v1.exceptions import InvalidLanguageCode
 
 
+def normalize_language_code(lang: Optional[str]) -> Optional[str]:
+    """Привести код языка к ISO 639-1 (или 639-3, если 639-1 нет).
+
+    `auto` пропускается как есть. Неверный код -> `InvalidLanguageCode`.
+    """
+    if lang is None:
+        return None
+    lang = lang.strip()
+    if lang == "auto":
+        return lang
+    if len(lang) == 2 and lang.isalpha():
+        try:
+            Lang(lang)
+            return lang.lower()
+        except Exception:
+            pass
+    try:
+        lang = Lang(lang)
+        return lang.pt1.lower() if lang.pt1 else lang.pt3.lower()
+    except Exception:
+        raise InvalidLanguageCode(detail="Неверный формат кода языка. Проверьте соответсвие на iso639")
+
+
 class TranslatorRequest(BaseModel):
     file: UploadFile = File(description="Файл, который нужно перевести.")
     parse_images: Optional[bool] = Field(
@@ -38,28 +61,13 @@ class TranslatorRequest(BaseModel):
 
     @field_validator('source_language', 'target_language', mode="after")
     def convert_to_iso639(cls, lang: Optional[str]) -> Optional[str]:
-        if lang is None:
-            return None
-        lang = lang.strip()
-        if lang == "auto":
-            return lang
-        if len(lang) == 2 and lang.isalpha():
-            try:
-                Lang(lang)
-                return lang.lower()
-            except Exception:
-                pass
-        try:
-            lang = Lang(lang)
-            return lang.pt1.lower() if lang.pt1 else lang.pt3.lower()
-        except Exception:
-            raise InvalidLanguageCode(detail="Неверный формат кода языка. Проверьте соответсвие на iso639")
+        return normalize_language_code(lang)
 
     @field_validator("file", mode="after")  
     @classmethod
     def is_allowed_mime_typy(cls, file: UploadFile) -> UploadFile:
         logger.debug(
-            "Проверка входного файла переводчика: filename='{}' mime='{}' size={}",
+            "Validating the translator input file: filename='{}' mime='{}' size={}",
             file.filename,
             file.content_type,
             file.size,
@@ -67,7 +75,7 @@ class TranslatorRequest(BaseModel):
         if file.content_type not in settings.ALLOWED_MIME_TYPES:
             file_extension = file.filename.split(".")[-1]
             raise ContentNotSupportedError(f"Данный формат файла \"{file_extension}\" не поддерживается")
-        logger.debug("MIME type поддерживается: filename='{}'", file.filename)
+        logger.debug("MIME type is supported: filename='{}'", file.filename)
         return file
 
 class TranslatorTextResponse(BaseModel):

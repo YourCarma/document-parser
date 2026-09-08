@@ -1,9 +1,21 @@
-from urllib.parse import quote, urlsplit, urlunsplit
+import asyncio
+from pathlib import Path
+from typing import Union
+from urllib.parse import quote
 
 import aiohttp
 from loguru import logger
 
+from modules.watchtower.exceptions import (
+    FileNotFoundInStorage,
+    FileTooLargeError,
+    WatchtowerError,
+    WatchtowerUnavailable,
+)
 from settings import settings
+
+
+DOWNLOAD_CHUNK_SIZE: int = 1024 * 1024
 
 
 class WatchtowerService:
@@ -25,10 +37,11 @@ class WatchtowerService:
 
     async def create_folder(self, bucket: str, prefix: str):
         """Создать placeholder-папку в bucket, если backend этого требует."""
-        prefix = self.encode_path(prefix)
+        bucket_segment = quote(str(bucket), safe="")
+        prefix = str(prefix).strip("/")
         async def request(session: aiohttp.ClientSession):
             async with session.post(
-                f"{self.base_url}/api/v1/cloud/{bucket}/folder",
+                f"{self.base_url}/api/v1/cloud/{bucket_segment}/folder",
                 json={"prefix": prefix},
             ) as resp:
                 body = await resp.text()
@@ -38,7 +51,7 @@ class WatchtowerService:
                         f"bucket='{bucket}' prefix='{prefix}': {body}"
                     )
                 logger.debug(
-                    "Watchtower: папка подготовлена bucket='{}' prefix='{}' status={}",
+                    "Watchtower: folder prepared bucket='{}' prefix='{}' status={}",
                     bucket,
                     prefix,
                     resp.status,
@@ -53,90 +66,138 @@ class WatchtowerService:
         prefix: str = "",
     ) -> str:
         """Загрузить локальный файл в bucket и вернуть object key."""
-        encoded_filename = self.encode_path(filename)
-        encoded_prefix = self.encode_path(prefix)
+        bucket_segment = quote(str(bucket), safe="")
+        # Multipart fields carry Unicode strings. Pre-encoding them would make
+        # `%D0...` part of the actual object name and Watchtower would encode
+        # every `%` again as `%25` when producing a share URL.
+        safe_filename = Path(str(filename).replace("\\", "/")).name
+        normalized_prefix = str(prefix).strip("/")
         async def request(session: aiohttp.ClientSession):
             with open(local_path, "rb") as f:
-                form = aiohttp.FormData()
-                if encoded_prefix:
-                    form.add_field("prefix", encoded_prefix)
+                # Watchtower stores multipart `filename` literally. aiohttp's
+                # default quote_fields=True turns Cyrillic into `%D0...`, which
+                # then becomes the visible object name instead of URL syntax.
+                form = aiohttp.FormData(quote_fields=False)
+                if normalized_prefix:
+                    form.add_field("prefix", normalized_prefix)
                 form.add_field(
                     "files",
                     f,
-                    filename=encoded_filename,
+                    filename=safe_filename,
                     content_type="application/octet-stream",
                 )
                 async with session.put(
-                    f"{self.base_url}/api/v1/cloud/{bucket}/file/upload",
+                    f"{self.base_url}/api/v1/cloud/{bucket_segment}/file/upload",
                     data=form,
                 ) as resp:
                     body = await resp.text()
                     if resp.status not in (200, 201):
                         raise Exception(
                             f"Watchtower upload_file [{resp.status}] "
-                            f"bucket='{bucket}' file='{encoded_filename}': {body}"
+                            f"bucket='{bucket}' file='{safe_filename}': {body}"
                         )
                     logger.info(
-                        "Watchtower: файл загружен bucket='{}' prefix='{}' filename='{}'",
+                        "Watchtower: file uploaded bucket='{}' prefix='{}' filename='{}'",
                         bucket,
-                        encoded_prefix,
-                        encoded_filename,
+                        normalized_prefix,
+                        safe_filename,
                     )
         await self._with_session(request)
-        if encoded_prefix:
-            return f"{encoded_prefix}/{encoded_filename}"
-        return encoded_filename
+        if normalized_prefix:
+            return f"{normalized_prefix}/{safe_filename}"
+        return safe_filename
 
-    async def get_sharelink(
+    async def download_file(
         self,
         bucket: str,
         file_path: str,
-        expired_secs: int = 3600 * 24 * 7,
+        dest_dir: Union[str, Path],
+        max_size_mb: int | None = None,
     ) -> str:
-        """Получить pre-signed share-ссылку для файла в bucket."""
-        async def request(session: aiohttp.ClientSession):
-            async with session.post(
-                f"{self.base_url}/api/v1/cloud/{bucket}/file/share",
-                json={"file_path": file_path, "expired_secs": expired_secs},
-            ) as resp:
-                body = await resp.text()
-                if resp.status not in (200, 201):
-                    raise Exception(
-                        f"Watchtower get_sharelink [{resp.status}] "
-                        f"bucket='{bucket}' file='{file_path}': {body}"
-                )
-                data = await resp.json()
-                url = data.get("message", "")
-                url = self._apply_shared_prefix(url)
-                logger.info(
-                    "Watchtower: получена share-ссылка bucket='{}' file_path='{}'",
-                    bucket,
-                    file_path,
-                )
-                return url
-        return await self._with_session(request)
-
-    @staticmethod
-    def encode_path(path: str) -> str:
-        """URL-encode object path segment-by-segment, preserving folder separators."""
-        return "/".join(
-            quote(segment, safe="")
-            for segment in str(path).strip("/").split("/")
-            if segment
+        """Скачать файл из бакета в `dest_dir` потоком и вернуть путь к нему."""
+        limit_mb = (
+            settings.MAX_DOWNLOAD_FILE_SIZE_MB if max_size_mb is None else max_size_mb
         )
+        limit_bytes = limit_mb * 1024 * 1024
+        bucket_segment = quote(str(bucket), safe="")
 
-    @staticmethod
-    def _apply_shared_prefix(url: str) -> str:
-        """Вернуть относительный frontend path или старую host-based ссылку."""
-        shared_prefix = settings.WATCHTOWER_SHARED_PREFIX.strip("/")
-        if url and shared_prefix:
-            parsed = urlsplit(url)
-            path = parsed.path if parsed.scheme or parsed.netloc else urlsplit(url).path
-            path = f"/{shared_prefix}/{path.lstrip('/')}"
-            return urlunsplit(("", "", path, parsed.query, parsed.fragment))
+        # Суффикс имени определяет парсер, поэтому имя не перекодируем и не
+        # нормализуем — только отбрасываем путь.
+        name = Path(str(file_path).replace("\\", "/")).name
+        if not name:
+            raise WatchtowerError(
+                f"Watchtower download_file: пустое имя файла в '{file_path}'"
+            )
 
-        if not url or not settings.WATCHTOWER_SHARED_HOST:
-            return url
-        host = settings.WATCHTOWER_SHARED_HOST.rstrip("/")
-        path = url.lstrip("/")
-        return f"{host}/{path}"
+        dest_root = Path(dest_dir)
+        dest_root.mkdir(parents=True, exist_ok=True)
+        dest = dest_root / name
+
+        async def request(session: aiohttp.ClientSession):
+            try:
+                async with session.post(
+                    f"{self.base_url}/api/v1/cloud/{bucket_segment}/file/download",
+                    json={"file_name": file_path},
+                ) as resp:
+                    if resp.status == 404:
+                        raise FileNotFoundInStorage(
+                            f"Watchtower download_file [404] "
+                            f"bucket='{bucket}' file='{file_path}'"
+                        )
+                    if resp.status >= 500:
+                        raise WatchtowerUnavailable(
+                            f"Watchtower download_file [{resp.status}] "
+                            f"bucket='{bucket}' file='{file_path}'"
+                        )
+                    if resp.status != 200:
+                        raise WatchtowerError(
+                            f"Watchtower download_file [{resp.status}] "
+                            f"bucket='{bucket}' file='{file_path}'"
+                        )
+
+                    # Быстрая отсечка по заголовку: не начинаем качать заведомо
+                    # слишком большой файл. Реальная защита — счётчик ниже.
+                    declared = resp.headers.get("Content-Length")
+                    if declared is not None:
+                        try:
+                            declared_size = int(declared)
+                        except (TypeError, ValueError):
+                            declared_size = None
+                        if declared_size is not None and declared_size > limit_bytes:
+                            raise FileTooLargeError(
+                                f"Файл '{name}' занимает {declared_size} байт "
+                                f"при лимите {limit_mb} МБ"
+                            )
+
+                    downloaded = 0
+                    try:
+                        with open(dest, "wb") as destination:
+                            async for chunk in resp.content.iter_chunked(
+                                DOWNLOAD_CHUNK_SIZE
+                            ):
+                                downloaded += len(chunk)
+                                if downloaded > limit_bytes:
+                                    raise FileTooLargeError(
+                                        f"Файл '{name}' превысил лимит "
+                                        f"{limit_mb} МБ при скачивании"
+                                    )
+                                destination.write(chunk)
+                    except BaseException:
+                        dest.unlink(missing_ok=True)
+                        raise
+            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+                raise WatchtowerUnavailable(
+                    f"Watchtower download_file недоступен "
+                    f"bucket='{bucket}' file='{file_path}': {exc}"
+                ) from exc
+
+            logger.info(
+                "Watchtower: file downloaded bucket='{}' file='{}' dest='{}' bytes={}",
+                bucket,
+                file_path,
+                dest,
+                downloaded,
+            )
+            return str(dest)
+
+        return await self._with_session(request)

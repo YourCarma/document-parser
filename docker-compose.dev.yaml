@@ -1,0 +1,41 @@
+# Локальное окружение для разработки очереди.
+# Поднимает только брокер: сам сервис удобнее гонять из IDE.
+#
+#   docker compose -f docker-compose.dev.yaml up -d
+#   BROKER_ENABLED=true PYTHONPATH=app python3 app/main.py
+#
+# Management UI: http://localhost:15672 (guest/guest)
+#
+# ВНИМАНИЕ: порты 5672/15672 могут быть уже заняты общим брокером
+# контура (например sys-dev-rabbitmq-1). Тогда этот compose не нужен —
+# используйте существующий брокер, проверив в нём consumer_timeout.
+#
+# Рабочие exchange и очередь сервис НЕ создаёт — их владелец task_gateway.
+# Для локальной работы без гейтвея создайте их руками:
+#   docker compose -f docker-compose.dev.yaml exec rabbitmq \
+#     rabbitmqadmin declare exchange name=document-parser.tasks type=direct durable=true
+#   docker compose -f docker-compose.dev.yaml exec rabbitmq \
+#     rabbitmqadmin declare queue name=document-parser.queue durable=true
+#   docker compose -f docker-compose.dev.yaml exec rabbitmq \
+#     rabbitmqadmin declare binding source=document-parser.tasks \
+#     destination=document-parser.queue routing_key=document-parser.translate
+
+services:
+  rabbitmq:
+    image: rabbitmq:4.0-management
+    container_name: document-parser-rabbitmq
+    restart: unless-stopped
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    volumes:
+      - './deploy/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro'
+      - 'rabbitmq-data:/var/lib/rabbitmq'
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  rabbitmq-data:

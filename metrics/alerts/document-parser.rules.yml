@@ -1,0 +1,129 @@
+# Правила рассчитаны на метрики этого сервиса. Пороги подобраны под текущие
+# настройки (TASK_TIMEOUT_SECS=3000, RMQ_ACK_DEADLINE_SECS=3600) — меняете их,
+# правьте и здесь.
+
+groups:
+  - name: document-parser.availability
+    rules:
+      - alert: DocumentParserConsumerSilent
+        # Под жив, метрики шлёт, но очередь не разбирает — самый неприятный
+        # случай: снаружи всё зелёное, задачи стоят.
+        expr: min by (job, instance) (document_parser_broker_consuming) == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: document-parser
+        annotations:
+          summary: 'Консюмер не потребляет очередь ({{ $labels.instance }})'
+          description: 'Подписка неактивна больше 2 минут. Задачи из очереди не разбираются.'
+
+      - alert: DocumentParserBrokerDisconnected
+        expr: min by (job, instance) (document_parser_broker_connected) == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: document-parser
+        annotations:
+          summary: 'Нет соединения с RabbitMQ ({{ $labels.instance }})'
+
+      - alert: DocumentParserDlqNotEmpty
+        # У рабочей очереди нет DLX: копии в DLQ кладёт сам сервис, значит
+        # каждое сообщение там — задача, провалившаяся окончательно.
+        expr: max by (job) (document_parser_broker_dlq_depth) > 0
+        for: 5m
+        labels:
+          severity: critical
+          service: document-parser
+        annotations:
+          summary: 'В DLQ {{ $value }} сообщений'
+          description: 'Задачи потеряны для пользователя, нужен ручной разбор.'
+
+      - alert: DocumentParserTopologyDegraded
+        expr: min by (job, object) (document_parser_broker_topology_ready) == 0
+        for: 10m
+        labels:
+          severity: warning
+          service: document-parser
+        annotations:
+          summary: 'Объект брокера "{{ $labels.object }}" недоступен'
+          description: 'Повторы идут через nack без счётчика либо копии в DLQ не публикуются.'
+
+  - name: document-parser.quality
+    rules:
+      - alert: DocumentParserTaskErrorRateHigh
+        expr: |
+          sum by (job) (rate(document_parser_tasks_total{status=~"error|timeout"}[15m]))
+            / clamp_min(sum by (job) (rate(document_parser_tasks_total[15m])), 0.001)
+            > 0.2
+        for: 15m
+        labels:
+          severity: warning
+          service: document-parser
+        annotations:
+          summary: 'Больше 20% задач перевода падает'
+          description: 'Смотрите разбивку по stage и error_type на дашборде.'
+
+      - alert: DocumentParserTaskDurationNearTimeout
+        # TASK_TIMEOUT_SECS=3000: p95 выше 2400s означает, что часть задач
+        # снимется по таймауту в ближайшее время.
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (job, le) (rate(document_parser_task_duration_seconds_bucket[30m]))
+          ) > 2400
+        for: 15m
+        labels:
+          severity: warning
+          service: document-parser
+        annotations:
+          summary: 'p95 задачи перевода подошёл к TASK_TIMEOUT_SECS'
+
+      - alert: DocumentParserAckDeadlineRisk
+        # Обработка дольше consumer_timeout брокера — ack протухает, и брокер
+        # переигрывает сообщение, порождая дубли.
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum by (job, le) (rate(document_parser_broker_processing_duration_seconds_bucket[30m]))
+          ) > 3000
+        for: 10m
+        labels:
+          severity: critical
+          service: document-parser
+        annotations:
+          summary: 'Обработка сообщения подошла к consumer_timeout'
+          description: 'Брокер может отозвать доставку — появятся дубли обработки.'
+
+      - alert: DocumentParserDependencyErrors
+        expr: |
+          sum by (job, dependency) (
+            rate(document_parser_dependency_requests_total{status!~"2..|3.."}[10m])
+          ) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          service: document-parser
+        annotations:
+          summary: 'Внешний сервис {{ $labels.dependency }} отвечает ошибками'
+
+      - alert: DocumentParserProcessPoolRebuilt
+        # Пересборка пула означает гибель воркера парсинга (чаще всего OOM).
+        expr: changes(document_parser_process_pool_generation[30m]) > 0
+        labels:
+          severity: warning
+          service: document-parser
+        annotations:
+          summary: 'Пул процессов пересобран — воркер парсинга умер'
+
+      - alert: DocumentParserSemaphoreSaturated
+        expr: |
+          min by (job, semaphore) (
+            document_parser_semaphore_in_use / clamp_min(document_parser_semaphore_capacity, 1)
+          ) >= 1
+        for: 15m
+        labels:
+          severity: warning
+          service: document-parser
+        annotations:
+          summary: 'Семафор "{{ $labels.semaphore }}" занят полностью 15 минут'
+          description: 'Задачи стоят в очереди за слотом: упёрлись в PARSER_WORKERS или TRANSLATOR_MAX_CONCURRENCY.'

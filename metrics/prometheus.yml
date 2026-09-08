@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts/*.yml
+
+scrape_configs:
+  # Путь 1: OTLP push сервис -> коллектор, отсюда Prometheus забирает скрейпом.
+  # honor_labels обязателен: job и instance проставил коллектор из ресурсных
+  # атрибутов сервиса, и перезаписывать их именем скрейп-джоба нельзя.
+  - job_name: otel-collector
+    honor_labels: true
+    static_configs:
+      - targets: ['otel-collector:8889']
+
+  # Путь 2: прямой скрейп сервиса. Полезен при отладке — видно сырые метрики
+  # до коллектора. Метрики те же самые, поэтому в дашборде выбирайте один job:
+  # суммирование по обоим путям посчитает всё дважды.
+  - job_name: document-parser-direct
+    static_configs:
+      - targets: ['host.docker.internal:9464']

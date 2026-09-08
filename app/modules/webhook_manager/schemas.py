@@ -10,6 +10,7 @@ class TaskStatus(str, Enum):
     PROCESSING = "PROCESSING"
     READY = "READY"
     ERROR = "ERROR"
+    CANCELLED = "CANCELLED"
 
 
 class TaskProgress(BaseModel):

@@ -1,14 +1,19 @@
 import uvicorn
-import asyncio
-import aiohttp
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from concurrent.futures.process import ProcessPoolExecutor
 from contextlib import asynccontextmanager
 from loguru import logger
 
+from modules.broker.abc.factory import BrokerFactory
+from modules.broker.dispatcher import build_default_dispatcher
+from modules.metrics import (
+    HTTPMetricsMiddleware,
+    setup_observability,
+    shutdown_observability,
+)
+from runtime import AppRuntime
 from settings import settings
 from api.routers import routers
 
@@ -24,33 +29,38 @@ async def lifespan(app: FastAPI):
                                         /_/
     """
     logger.info(GREETINGS)
-    app.state.executor = ProcessPoolExecutor(max_workers=settings.PARSER_WORKERS)
-    app.state.parser_semaphore = asyncio.Semaphore(settings.PARSER_WORKERS)
-    app.state.translation_semaphore = asyncio.Semaphore(
-        settings.TRANSLATOR_MAX_CONCURRENCY,
-    )
-    timeout = aiohttp.ClientTimeout(
-        total=None,
-        connect=settings.EXTERNAL_CONNECT_TIMEOUT_SECS,
-        sock_read=settings.EXTERNAL_READ_TIMEOUT_SECS,
-    )
-    connector = aiohttp.TCPConnector(
-        limit=settings.EXTERNAL_HTTP_CONNECTION_LIMIT,
-    )
-    app.state.http_session = aiohttp.ClientSession(
-        timeout=timeout,
-        connector=connector,
-    )
+    logger.info("webhook_manager task key format: '{{user_id}}:{}:{{task_id}}'",
+                settings.SERVICE_NAME)
+    runtime = AppRuntime.create()
+    runtime.attach(app)
+    app.state.runtime = runtime
+    app.state.broker = None
     try:
+        if settings.BROKER_ENABLED:
+            consumer = BrokerFactory.create(runtime, build_default_dispatcher())
+            try:
+                # Ошибка подключения пробрасывается осознанно: не консюмящий
+                # воркер в проде хуже упавшего.
+                await consumer.connect()
+                await consumer.start()
+            except Exception:
+                # До app.state.broker дело не дошло, значит finally его не
+                # погасит: закрываем соединение здесь, иначе оно повиснет.
+                await consumer.stop()
+                raise
+            app.state.broker = consumer
+        else:
+            logger.info("Broker: disabled (BROKER_ENABLED=false)")
         yield
     finally:
-        logger.info("Остановка сервиса document-parser")
-        await app.state.http_session.close()
-        await asyncio.to_thread(
-            app.state.executor.shutdown,
-            wait=True,
-            cancel_futures=True,
-        )
+        logger.info("Shutting down document-parser service")
+        if app.state.broker is not None:
+            # Сначала консюмер: он пользуется сессией и пулом из runtime.
+            await app.state.broker.stop()
+        await runtime.shutdown()
+        # Последним: телеметрия должна пережить остальных, чтобы дослать
+        # события их остановки.
+        shutdown_observability()
 
 app = FastAPI(
     title="Document Parser",
@@ -70,15 +80,17 @@ app = FastAPI(
 
 - `Parser V1` — парсинг документа в текст, `.md` или `.docx`.
 - `Translator V1` — синхронный перевод документа в рамках одного HTTP-запроса.
-- `Translator V2` — асинхронный перевод с `task_id`, прогрессом и загрузкой
-  исходного и итогового файла в облачное хранилище.
+- Асинхронный перевод — **только из очереди**: задачу ставит клиент через
+  `task_gateway`, сервис забирает её из RabbitMQ, а прогресс и результат
+  публикует в `webhook_manager`. Правила формирования задачи отдаёт сам
+  сервис: `GET /api/v1/contract.md`.
 
 ## Внешние зависимости
 
 - VLM для OCR и full-VLM-парсинга PDF.
 - Сервис перевода текста.
 - Сервис определения языка.
-- `webhook_manager`, `watchtower`, `resource_manager` для async-сценария.
+- `webhook_manager`, `watchtower`, `resource_manager` для задач из очереди.
 """,
     openapi_tags=[
         {
@@ -98,13 +110,6 @@ app = FastAPI(
                 "на тот же запрос."
             ),
         },
-        {
-            "name": "Translator V2",
-            "description": (
-                "Асинхронный перевод документов с прогрессом, `task_id` и "
-                "загрузкой файлов в облачное хранилище."
-            ),
-        },
     ],
 )
 
@@ -118,6 +123,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
     
+app.add_middleware(HTTPMetricsMiddleware)
+
+# До старта приложения: авто-инструментация FastAPI добавляет свою мидлварь, а
+# после старта стек мидлварей уже собран и менять его нельзя.
+setup_observability(app)
+
 for router in routers:
     app.include_router(router)
 
@@ -129,10 +140,27 @@ async def get_root():
     """
 
 @app.get('/health', tags=['System'])
-async def health_check():
-    return {
-        'status': "Ok",
-    }
+async def health_check(request: Request, response: Response):
+    """Готовность сервиса, включая состояние консюмера.
+
+    Отдаём 503, если консюмер включён, но не потребляет: под, который молча
+    не разбирает очередь, для оркестратора должен выглядеть больным.
+    """
+    broker = getattr(request.app.state, "broker", None)
+    if broker is None:
+        return {"status": "Ok", "broker": "disabled"}
+
+    try:
+        report = await broker.health_report()
+    except Exception as exc:
+        logger.error("Health: failed to poll the consumer: {}", exc)
+        response.status_code = 503
+        return {"status": "Error", "broker": {"healthy": False, "error": str(exc)}}
+
+    if not report.get("healthy"):
+        response.status_code = 503
+        return {"status": "Error", "broker": report}
+    return {"status": "Ok", "broker": report}
 
 if __name__ == "__main__":
     uvicorn.run(

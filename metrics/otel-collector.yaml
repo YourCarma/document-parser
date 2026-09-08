@@ -1,0 +1,51 @@
+# Коллектор — единственная точка, которая знает, куда на самом деле уходят
+# данные. Сервис всегда шлёт в него, а смена бэкенда (Mimir, Grafana Cloud,
+# другой Tempo) правится здесь, без выкатки сервиса.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Первым в конвейере: под нагрузкой коллектор должен отказывать в приёме,
+  # а не расти в памяти, пока его не убьёт OOM.
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 400
+    spike_limit_mib: 100
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+
+exporters:
+  # Метрики отдаём скрейпом: Prometheus в этом стенде ходит на :8889.
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    # Ресурсные атрибуты остаются в target_info и в job/instance, а не
+    # размножаются по каждой метрике лишними лейблами.
+    resource_to_telemetry_conversion:
+      enabled: false
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/tempo]
+  telemetry:
+    logs:
+      level: info

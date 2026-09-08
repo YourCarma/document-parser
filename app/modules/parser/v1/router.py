@@ -80,7 +80,7 @@ async def parse_to_text(
         )
         return ParserTextResponse(parsed_text=text)
     except Exception as e:
-        logger.error(f"Ошибка парсинга документа в текст: {e}")
+        logger.error(f"Failed to parse the document into text: {e}")
         raise
     finally:
         await delete_file(file_path)
@@ -151,7 +151,7 @@ async def parse_to_file(
         output_path = None
         return response
     except Exception as e:
-        logger.error(f"Ошибка парсинга документа в .md: {e}")
+        logger.error(f"Failed to parse the document into .md: {e}")
         await delete_file(output_path)
         raise
     finally:
@@ -223,7 +223,7 @@ async def parse_to_word_file(
         output_path = None
         return response
     except Exception as e:
-        logger.error(f"Ошибка парсинга документа в .docx: {e}")
+        logger.error(f"Failed to parse the document into .docx: {e}")
         await delete_file(output_path)
         raise
     finally:
